@@ -1,21 +1,23 @@
 #!/usr/bin/env bash
-# Verify the shared Pokemon Stadium workspace layout.
+# Initialize and verify this repository's nested dependencies.
 
 set -euo pipefail
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-WORKSPACE_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/../.." && pwd)
-DECOMP_DIR="$WORKSPACE_ROOT/decomp/pokestadiumgs"
-N64RECOMP_DIR="$WORKSPACE_ROOT/toolchain/N64Recomp"
-RUNTIME_DIR="$WORKSPACE_ROOT/toolchain/N64ModernRuntime"
-RT64_DIR="$WORKSPACE_ROOT/toolchain/rt64"
-UI_DIR="$WORKSPACE_ROOT/toolchain/recomp-ui"
-ARES_DIR="$WORKSPACE_ROOT/toolchain/ares"
+cd "$SCRIPT_DIR"
+
+git submodule update --init --recursive
+
+DECOMP_DIR="$SCRIPT_DIR/disasm"
+N64RECOMP_DIR="$SCRIPT_DIR/n64recomp"
+RUNTIME_DIR="$SCRIPT_DIR/lib/N64ModernRuntime"
+RT64_DIR="$SCRIPT_DIR/lib/rt64"
+UI_DIR="$SCRIPT_DIR/recomp-ui"
 
 require_repo() {
     if [ ! -e "$1/.git" ]; then
-        echo "Error: required workspace repository is missing: $1" >&2
-        echo "Run 'git submodule update --init --recursive' from $WORKSPACE_ROOT." >&2
+        echo "Error: required nested repository is missing: $1" >&2
+        echo "Run 'git submodule update --init --recursive' from $SCRIPT_DIR." >&2
         exit 1
     fi
 }
@@ -32,10 +34,17 @@ fi
 
 ACTUAL=$(git -C "$N64RECOMP_DIR" rev-parse HEAD)
 if [ "$ACTUAL" != "$SHA" ]; then
-    echo "Note: N64Recomp HEAD ($ACTUAL) differs from the game pin ($SHA)."
+    echo "Note: n64recomp HEAD ($ACTUAL) differs from the game pin ($SHA)."
 fi
 
+ROM_SOURCE="$SCRIPT_DIR/baserom.z64"
 ROM_PATH="$DECOMP_DIR/baseroms/us/baserom.z64"
+if [ -f "$ROM_SOURCE" ] && [ ! -f "$ROM_PATH" ]; then
+    mkdir -p "$(dirname -- "$ROM_PATH")"
+    cp "$ROM_SOURCE" "$ROM_PATH"
+    echo "Staged baserom.z64 -> disasm/baseroms/us/"
+fi
+
 EXPECTED_MD5="1561c75d11cedf356a8ddb1a4a5f9d5d"
 if [ -f "$ROM_PATH" ]; then
     if command -v md5sum >/dev/null 2>&1; then
@@ -49,18 +58,14 @@ if [ -f "$ROM_PATH" ]; then
         echo "Stadium 2 baserom MD5 OK."
     fi
 else
-    echo "Note: place your legal Stadium 2 US ROM at $ROM_PATH"
-fi
-
-if [ "${WITH_ARES:-0}" = "1" ]; then
-    require_repo "$ARES_DIR"
+    echo "Note: place your legal Stadium 2 US ROM at $ROM_SOURCE"
 fi
 
 echo
-echo "Workspace dependencies are available."
+echo "Nested dependencies are available."
 echo "  pokestadiumgs: $(git -C "$DECOMP_DIR" rev-parse --short HEAD)"
 echo "  N64Recomp:     $(git -C "$N64RECOMP_DIR" rev-parse --short HEAD)"
 echo
 echo "Build the disassembly from: $DECOMP_DIR"
-echo "Configure the game from the workspace root:"
-echo "  cmake -S games/pokemonStadiumGSRecomp -B build/games/stadium2"
+echo "Configure the game from this repository:"
+echo "  cmake -S . -B build"

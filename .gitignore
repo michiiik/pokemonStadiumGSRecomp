@@ -18,10 +18,7 @@ disasm/build/
 disasm/probes/
 generated/
 
-# Dependencies live in the workspace sibling decomp/ and toolchain/ trees.
-# Ignore obsolete per-game checkouts if an older setup script created them.
-/disasm/
-/n64recomp/
+# Optional local Ares oracle checkout
 /ares-emulator/
 
 # Durable probe-stats history (see tools/probe_stats.py) -- deliberately

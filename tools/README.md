@@ -1,8 +1,7 @@
 # Project tools
 
 These tools are intentionally small and repository-relative. They expect the
-Stadium 2 repository to be checked out in the documented workspace layout so
-the public decompilation submodule is available at `../../decomp/pokestadiumgs`.
+public decompilation fork to be initialized as the nested `disasm` submodule.
 
 - `verify_rom.ps1` checks the local ignored `baserom.z64`.
 - `derive_recomp_metadata.py` derives fragment and function-size metadata from

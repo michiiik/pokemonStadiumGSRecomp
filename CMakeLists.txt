@@ -14,12 +14,6 @@ project(PokemonStadiumGSRecomp C CXX)
 # Keep the workspace build compatible with the local clang-cl toolchain.
 add_compile_definitions(FMT_USE_CONSTEVAL=0)
 
-# This game uses the shared sibling workspace layout. Keep shared build
-# dependencies in workspace submodules so the checkout remains portable and
-# does not depend on a developer's old staging directory.
-get_filename_component(PSR_WORKSPACE_ROOT "${CMAKE_SOURCE_DIR}/../.." ABSOLUTE)
-set(PSR_TOOLCHAIN_ROOT "${PSR_WORKSPACE_ROOT}/toolchain")
-
 set(CMAKE_C_STANDARD 17)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -91,26 +85,26 @@ if (ANDROID)
     set(SDL_STATIC ON CACHE BOOL "" FORCE)
     set(SDL_TESTS OFF CACHE BOOL "" FORCE)
     list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
-    set(PSR_SDL2_DIR "${PSR_TOOLCHAIN_ROOT}/SDL2" CACHE PATH
+    set(PSR_SDL2_DIR "${CMAKE_SOURCE_DIR}/lib/SDL2" CACHE PATH
         "Path to the SDL2 checkout used for Android builds")
     if (NOT EXISTS "${PSR_SDL2_DIR}/CMakeLists.txt")
         message(FATAL_ERROR
             "Android builds require SDL2 at ${PSR_SDL2_DIR}. "
-            "Add the workspace SDL2 dependency before configuring Android.")
+            "Initialize the lib/SDL2 submodule before configuring Android.")
     endif()
     add_subdirectory(${PSR_SDL2_DIR} ${CMAKE_BINARY_DIR}/SDL2 EXCLUDE_FROM_ALL)
 endif()
 
-add_subdirectory(${PSR_TOOLCHAIN_ROOT}/rt64 ${CMAKE_BINARY_DIR}/rt64)
+add_subdirectory(${CMAKE_SOURCE_DIR}/lib/rt64 ${CMAKE_BINARY_DIR}/rt64)
 
 if (ANDROID)
-    set(PSR_ADRENOTOOLS_DIR "${PSR_TOOLCHAIN_ROOT}/adrenotools" CACHE PATH
+    set(PSR_ADRENOTOOLS_DIR "${CMAKE_SOURCE_DIR}/lib/adrenotools" CACHE PATH
         "Path to the libadrenotools checkout")
     if (NOT EXISTS "${PSR_ADRENOTOOLS_DIR}/include/adrenotools/driver.h" OR
         NOT EXISTS "${PSR_ADRENOTOOLS_DIR}/lib/linkernsbypass/CMakeLists.txt")
         message(FATAL_ERROR
-            "Android custom graphics drivers require the workspace toolchain/adrenotools checkout and its nested submodule. "
-            "Initialize the workspace dependency before configuring Android.")
+            "Android custom graphics drivers require the lib/adrenotools submodule and its nested submodule. "
+            "Run git submodule update --init --recursive before configuring Android.")
     endif()
     add_subdirectory(${PSR_ADRENOTOOLS_DIR} ${CMAKE_BINARY_DIR}/adrenotools)
 endif()
@@ -121,8 +115,8 @@ endif()
 # vendored RmlUi + lunasvg overlay. Keep static linkage for the engine subdirs.
 set(BUILD_SHARED_LIBS OFF)
 
-# ---- N64ModernRuntime (workspace submodule) --------------------------------
-set(N64MODERN_RUNTIME_ROOT "${PSR_TOOLCHAIN_ROOT}/N64ModernRuntime" CACHE PATH
+# ---- N64ModernRuntime (nested submodule) -----------------------------------
+set(N64MODERN_RUNTIME_ROOT "${CMAKE_SOURCE_DIR}/lib/N64ModernRuntime" CACHE PATH
     "Path to the N64ModernRuntime checkout used by this game")
 add_subdirectory(${N64MODERN_RUNTIME_ROOT} ${CMAKE_BINARY_DIR}/lib/N64ModernRuntime)
 get_target_property(LIBRECOMP_SOURCES librecomp SOURCES)
@@ -268,12 +262,12 @@ target_include_directories(PokemonStadiumGSRecomp PRIVATE
     ${N64MODERN_RUNTIME_ROOT}/librecomp/include
     ${N64MODERN_RUNTIME_ROOT}/N64Recomp/include
     ${N64MODERN_RUNTIME_ROOT}/thirdparty/concurrentqueue
-    ${PSR_TOOLCHAIN_ROOT}/rt64/src
-    ${PSR_TOOLCHAIN_ROOT}/rt64/src/contrib
-    ${PSR_TOOLCHAIN_ROOT}/rt64/src/contrib/hlslpp/include
-    ${PSR_TOOLCHAIN_ROOT}/rt64/src/contrib/dxc/inc
-    ${PSR_TOOLCHAIN_ROOT}/rt64/src/rhi
-    ${PSR_TOOLCHAIN_ROOT}/rt64/src/render
+    ${CMAKE_SOURCE_DIR}/lib/rt64/src
+    ${CMAKE_SOURCE_DIR}/lib/rt64/src/contrib
+    ${CMAKE_SOURCE_DIR}/lib/rt64/src/contrib/hlslpp/include
+    ${CMAKE_SOURCE_DIR}/lib/rt64/src/contrib/dxc/inc
+    ${CMAKE_SOURCE_DIR}/lib/rt64/src/rhi
+    ${CMAKE_SOURCE_DIR}/lib/rt64/src/render
     ${CMAKE_CURRENT_BINARY_DIR}
 )
 
@@ -336,8 +330,8 @@ if (WIN32)
     add_custom_command(TARGET PokemonStadiumGSRecomp POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
             "${sdl2_SOURCE_DIR}/lib/x64/SDL2.dll"
-            "${PSR_TOOLCHAIN_ROOT}/rt64/src/contrib/dxc/bin/x64/dxil.dll"
-            "${PSR_TOOLCHAIN_ROOT}/rt64/src/contrib/dxc/bin/x64/dxcompiler.dll"
+            "${CMAKE_SOURCE_DIR}/lib/rt64/src/contrib/dxc/bin/x64/dxil.dll"
+            "${CMAKE_SOURCE_DIR}/lib/rt64/src/contrib/dxc/bin/x64/dxcompiler.dll"
             $<TARGET_FILE_DIR:PokemonStadiumGSRecomp>
     )
 
@@ -417,15 +411,15 @@ if (NOT ANDROID)
     # The launcher uses RT64's single host ImGui copy to avoid duplicate symbols.
 set(RECOMP_UI_HOST_IMGUI ON)
 set(RECOMP_UI_HOST_IMGUI_INCLUDE
-    ${PSR_TOOLCHAIN_ROOT}/rt64/src/contrib/imgui
-    ${PSR_TOOLCHAIN_ROOT}/rt64/src/contrib/imgui/backends)
-    include(${PSR_TOOLCHAIN_ROOT}/recomp-ui/recomp_ui.cmake)
+    ${CMAKE_SOURCE_DIR}/lib/rt64/src/contrib/imgui
+    ${CMAKE_SOURCE_DIR}/lib/rt64/src/contrib/imgui/backends)
+    include(${CMAKE_SOURCE_DIR}/recomp-ui/recomp_ui.cmake)
     recomp_target_launcher_ui(PokemonStadiumGSRecomp CONSOLE n64)
     target_sources(PokemonStadiumGSRecomp PRIVATE
-        ${PSR_TOOLCHAIN_ROOT}/rt64/src/contrib/imgui/backends/imgui_impl_opengl3.cpp)
+        ${CMAKE_SOURCE_DIR}/lib/rt64/src/contrib/imgui/backends/imgui_impl_opengl3.cpp)
     # recomp-ui pins the target to C++17; PSR's runner needs C++20.
     set_target_properties(PokemonStadiumGSRecomp PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
-set_source_files_properties(${PSR_TOOLCHAIN_ROOT}/recomp-ui/src/common/backends/imgui/launcher_imgui.cpp PROPERTIES COMPILE_OPTIONS "/Zc:char8_t-")
+set_source_files_properties(${CMAKE_SOURCE_DIR}/recomp-ui/src/common/backends/imgui/launcher_imgui.cpp PROPERTIES COMPILE_OPTIONS "/Zc:char8_t-")
 endif()
 
 # ---- UI assets (fonts, etc.) next to the executable ------------------------

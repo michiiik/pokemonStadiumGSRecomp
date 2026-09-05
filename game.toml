@@ -4,7 +4,7 @@
 [input]
 entrypoint = 0x80000400
 rom_file_path = "baserom.z64"
-elf_path = "../../decomp/pokestadiumgs/build/pokestadiumgs-us.elf"
+elf_path = "disasm/build/pokestadiumgs-us.elf"
 output_func_path = "generated"
 relocatable_sections_path = "fragments_relocatable.txt"
 bss_section_suffix = "_bss"
