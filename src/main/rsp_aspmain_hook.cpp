@@ -1,0 +1,379 @@
+/*
+ * rsp_aspmain_hook.cpp — Pre-task hook for Pokemon Stadium's aspMain.
+ *
+ * Stadium's aspMain (ROM 0x68020, 0xC60 bytes) is a stripped variant
+ * of the standard libultra audio microcode. Unlike Zelda64's aspMain
+ * (which calls a setup function at PC 0x1058 to load the audio
+ * command list before dispatch), Stadium's entry path
+ *   PC 0x1000 (mfc0 DPC_STATUS) → L_102C (jal L_1120)
+ * has NO command-load step. It depends on rspboot leaving:
+ *   - $29 = 0x2B0  (DMEM offset of audio command list)
+ *   - $30 > 0      (chunk-remaining counter)
+ *   - SP_MEM_ADDR / SP_DRAM_ADDR / SP_RD_LEN already pointing at a
+ *     safe RDRAM range so the L_1120 → L_10EC tail-DMA is a no-op
+ *   - DMEM[0x2B0..0x3EF] = first chunk of audio commands
+ *
+ * Our HLE doesn't run rspboot, so the recompiled aspMain hits the
+ * dispatch loop at L_1048 with $29 = 0 and dispatch table residue
+ * in DMEM. The first L_10EC tail-DMA writes 1 byte from RDRAM[0]
+ * into DMEM[3], corrupting dispatch[0]'s low byte from 0x10 to 0x00,
+ * which makes the dispatch lookup return 0xEC, which dispatches to
+ * L_10EC again → self-perpetuating infinite loop (caught by the
+ * RSPRecomp watchdog after 100M transitions).
+ *
+ * This hook replicates the rspboot residue Stadium's aspMain
+ * expects:
+ *   1. DMA the first chunk of audio commands (up to 0x140 bytes)
+ *      from task->t.data_ptr to DMEM[0x2B0].
+ *   2. Seed $29, $30, $27, $28 to match what the dead-code init
+ *      function at PC 0x10A0 would have computed if Stadium's
+ *      boot path had called it.
+ *   3. Seed dma_mem_address / dma_dram_address / r3 so the boot
+ *      path's bogus L_1120 → L_10EC DMA at PC 0x1140 becomes a
+ *      no-op (re-reads ucode_data byte 0 into DMEM[0xFFC], which
+ *      is safe scratch space outside the dispatch table).
+ *
+ * Validation: with this hook, the watchdog should NOT trip; dispatch
+ * should land on real handlers (0x139C, 0x119C, etc.) and aspMain
+ * should reach the `mtc0 r1, SP_STATUS; break 0` at L_108C in finite
+ * time, returning RspExitReason::Broke.
+ *
+ * This is NOT a stub: it encodes the real HLE-correct boot residue
+ * Stadium's aspMain needs.
+ * On real hardware rspboot does the equivalent setup; we replicate it.
+ */
+
+#include <cstdint>
+#include <cstdio>
+#include <cstring>
+
+#include "librecomp/rsp.hpp"
+#include "ultramodern/ultra64.h"
+
+// Reach into librecomp's DMEM array. Declared at file scope (not
+// inside our namespace) so the extern resolves to the global
+// `dmem` defined in librecomp/src/rsp.cpp.
+extern uint8_t dmem[];
+
+namespace pokestadium::rsp {
+
+// Audio task command-list chunk size. Stadium's dead-code init at
+// PC 0x10A0 caps the initial DMA at 0x140 bytes; this matches what
+// the dispatch loop's "refresh" path expects.
+constexpr uint32_t kAudioChunkSize = 0x140;
+
+// DMEM destination offset where audio commands live. Stadium's
+// dead-code init function tail (`addi $29, $0, 0x2B0`) puts them
+// here; the dispatch loop reads commands via `lw $26, 0($29)`.
+constexpr uint32_t kAudioCommandsDmemOffset = 0x2B0;
+
+// Safe DMEM scratch offset for the boot-path's bogus L_10EC DMA.
+// Anywhere past the dispatch table (0x00..0x1F) and the constants
+// area (0x20..0xAF) and the audio commands (0x2B0..0x3EF) works.
+// 0xFFC is just before the OSTask copy at 0xFC0 — wait, 0xFC0 is
+// where OSTask starts. Use 0xFA0 instead, which is set up as r24
+// in the boot path and is documented scratch.
+constexpr uint32_t kBootDmaSafeDmemOffset = 0xFA0;
+
+static void aspmain_capture_input(uint8_t* rdram, ::RspContext* ctx,
+                                  uint32_t ucode_addr, uint32_t data_ptr,
+                                  uint32_t data_size, uint32_t chunk);
+
+// ── Spike-triggered capture slots ───────────────────────────────────
+// PSR_ASPMAIN_SPIKE_DIR=<dir> keeps every task's post-seed DMEM +
+// RspContext in RAM; when the wrapper detects a seam discontinuity
+// right after a task completes, psr_aspmain_spike_write_inputs() dumps
+// the slot as a replay-grade capture of the exact defective task.
+namespace {
+    char     g_spike_dir[512] = {0};
+    int      g_spike_enabled  = -1;   // -1 unqueried, 0 off, 1 on
+    bool     g_spike_slot_valid = false;
+    uint8_t  g_spike_dmem[0x1000];
+    ::RspContext g_spike_ctx;
+    uint32_t g_spike_ucode_addr = 0, g_spike_data_ptr = 0;
+    uint32_t g_spike_data_size = 0, g_spike_chunk = 0;
+}
+extern "C" const char* psr_aspmain_spike_dir(void) {
+    if (g_spike_enabled == -1) {
+        const char* e = getenv("PSR_ASPMAIN_SPIKE_DIR");
+        if (e && *e) {
+            strncpy(g_spike_dir, e, sizeof(g_spike_dir) - 1);
+            g_spike_enabled = 1;
+        } else {
+            g_spike_enabled = 0;
+        }
+    }
+    return (g_spike_enabled == 1) ? g_spike_dir : nullptr;
+}
+// Dump the current task's input slot (same file contract as the armed
+// capture, so PSR_ASPMAIN_REPLAY consumes it unchanged). Returns 0 if
+// the slot is stale (task bypassed the seeding path).
+extern "C" int psr_aspmain_spike_write_inputs(const char* dir) {
+    if (!g_spike_slot_valid) return 0;
+    char path[640];
+    snprintf(path, sizeof(path), "%s/dmem.bin", dir);
+    if (FILE* f = fopen(path, "wb")) { fwrite(g_spike_dmem, 1, 0x1000, f); fclose(f); }
+    snprintf(path, sizeof(path), "%s/ctx.bin", dir);
+    if (FILE* f = fopen(path, "wb")) {
+        fwrite(&g_spike_ctx.r1, sizeof(uint32_t), 31, f);
+        fwrite(&g_spike_ctx.dma_mem_address, sizeof(uint32_t), 1, f);
+        fwrite(&g_spike_ctx.dma_dram_address, sizeof(uint32_t), 1, f);
+        fwrite(&g_spike_ucode_addr, sizeof(uint32_t), 1, f);
+        fclose(f);
+    }
+    snprintf(path, sizeof(path), "%s/ctx_full.bin", dir);
+    if (FILE* f = fopen(path, "wb")) { fwrite(&g_spike_ctx, 1, sizeof(g_spike_ctx), f); fclose(f); }
+    snprintf(path, sizeof(path), "%s/meta.txt", dir);
+    if (FILE* f = fopen(path, "w")) {
+        fprintf(f, "ucode_addr=0x%08X\ndata_ptr=0x%08X\ndata_size=0x%X\nchunk=0x%X\n"
+                   "trigger=seam_spike\n",
+                g_spike_ucode_addr, g_spike_data_ptr, g_spike_data_size, g_spike_chunk);
+        fclose(f);
+    }
+    return 1;
+}
+
+void aspmain_pre_task(uint8_t* rdram,
+                      ::RspContext* ctx,
+                      const char* ucode_name,
+                      uint32_t ucode_addr) {
+    // A task that bypasses the seeding path below (empty task early-out)
+    // must not leave a stale spike-capture slot attributed to it.
+    g_spike_slot_valid = false;
+    // Read OSTask back from DMEM[0xFC0] where the runtime stored
+    // it. We could pass a separate OSTask* but reading from DMEM
+    // matches what real rspboot does: the task struct lives there
+    // and aspMain reads its own data_ptr / data_size from
+    // DMEM[0xFC0+0x30] / DMEM[0xFC0+0x34].
+    //
+    // Pull values directly from the runtime-side dmem array via
+    // the same XOR-3 byte ordering the recompiled MEM_W_LOAD uses.
+    // We need data_ptr (offset 0x30) and data_size (offset 0x34).
+    auto load_w = [](uint32_t off) -> uint32_t {
+        // Replicate RSP_MEM_W_LOAD: read 4 bytes with each byte
+        // XOR-3'd to host position (i^3). On LE host the result
+        // is the big-endian word as a native uint32.
+        uint32_t out = 0;
+        for (int i = 0; i < 4; i++) {
+            uint8_t b = dmem[(off + i) ^ 3];
+            reinterpret_cast<uint8_t*>(&out)[i ^ 3] = b;
+        }
+        return out;
+    };
+    uint32_t data_ptr  = load_w(0xFC0 + 0x30);
+    uint32_t data_size = load_w(0xFC0 + 0x34);
+
+    if (data_size == 0 || data_ptr == 0) {
+        // Empty task — let aspMain handle whatever degenerate
+        // state it falls into. Don't synthesize fake commands.
+        return;
+    }
+
+    // Compute first chunk size (matches dead-code init at 0x10A0).
+    uint32_t chunk = (data_size > kAudioChunkSize)
+                         ? kAudioChunkSize
+                         : data_size;
+
+    // Pre-load first chunk of audio commands. dma_rdram_to_dmem
+    // takes rd_len as inclusive (RSP DMA semantics: the value
+    // written to SP_RD_LEN equals length-1).
+    ::recomp::rsp::dma_rdram_to_dmem_external(
+        rdram,
+        kAudioCommandsDmemOffset,
+        data_ptr,
+        chunk - 1);
+
+    // Seed r28/r27 with the OSTask's data_ptr/data_size as-is
+    // (NOT advanced past the preloaded chunk).
+    //
+    // Why not "data_ptr + chunk" / "data_size - chunk"? Earlier this
+    // hook seeded those advanced values to compensate for having just
+    // DMA'd the first chunk into DMEM[0x2B0] manually. That assumed
+    // dispatch would start consuming commands from the preloaded DMEM
+    // immediately. But that's not what aspMain does: from L_108C it
+    // reaches L_10AC and unconditionally calls L_1120 (the DMA-pump),
+    // which DMAs `chunk` bytes from DRAM[r28..r28+chunk] into
+    // DMEM[0x2B0..]. With the advanced r28, L_1120 was loading
+    // CHUNK 2 over our preloaded CHUNK 1 — silently skipping the
+    // first ~40 audio commands every task. Voice setup commands live
+    // in that first batch; missing them produces audible static and
+    // buzzing as voices get mixed before they're configured.
+    //
+    // With r28=data_ptr / r27=data_size, L_1120 DMAs chunk 1 itself
+    // (over our identical preload — redundant but harmless), then
+    // dispatch processes chunk 1 in order. r28/r27 then evolve
+    // through the dispatch loop's per-command increment + L_10EC's
+    // tail-DMA refresh exactly as the microcode designers intended.
+    //
+    // Other seeds below (r29, r30, dma_*, r3, r31) are all
+    // overwritten by L_1120 / L_114C / L_1138 before they're
+    // consumed, so they're effectively no-ops, but keeping them
+    // matches the prior boot-residue model in case the hook gets
+    // entered via an entry point that bypasses L_108C..L_10AC in
+    // some future variant.
+    ctx->r29 = kAudioCommandsDmemOffset;
+    ctx->r30 = static_cast<int32_t>(chunk);
+    ctx->r27 = data_size;
+    ctx->r28 = data_ptr;
+
+    // Seed DMA-engine residue + r3 + r31 to match what real rspboot
+    // leaves behind, per Ares oracle measurement at first L_10EC of
+    // a Stadium audio task (queried via tools/diff_aspmain.py +
+    // ares_oracle_server's boot snapshot):
+    //
+    //   dma_mem_address  = 0x2B0  (DMEM of audio command region)
+    //   dma_dram_address = data_ptr + chunk  (next chunk's DRAM addr)
+    //   r3               = chunk - 1 = 0x13F (size-1 of just-loaded chunk)
+    //   r31              = 0x1144  (boot-path return point for L_10EC's jr)
+    //
+    // The boot-path L_10EC at PC 0x10EC fires `mtc0 r3, SP_RD_LEN` in
+    // its delay slot; that kicks a DMA of (r3+1) bytes from
+    // SP_DRAM_ADDR to SP_MEM_ADDR. With the values above, that DMA
+    // refills DMEM[0x2B0..0x3EF] with the FIRST already-resident
+    // chunk over itself (no-op effectively) — but importantly, the
+    // post-DMA auto-increment moves SP_MEM_ADDR to 0x3F0 and
+    // SP_DRAM_ADDR forward by 0x140, lining up the NEXT chunk for
+    // the dispatcher's eventual L_106C -> L_1120 -> L_10EC refresh.
+    //
+    // r31 = 0x1144 is the address of the instruction immediately
+    // after `j 0x10EC`'s delay slot at PC 0x1140 inside L_1120. After
+    // L_10EC's `jr r31`, control resumes at 0x1144 to continue the
+    // boot setup (which leads into the dispatch loop via L_106C's
+    // bgtz r30 path). Without this, jr r31 returns to whatever the
+    // last jal set (0x1038 — the dispatch loop start), which causes
+    // the dispatcher to re-enter L_10EC every iteration.
+    ctx->dma_mem_address  = kAudioCommandsDmemOffset;
+    ctx->dma_dram_address = data_ptr + chunk;
+    ctx->r3               = chunk - 1;
+    ctx->r31              = 0x1144;
+
+    // Single-task replay capture (Milestone 1): dump this task's input state.
+    aspmain_capture_input(rdram, ctx, ucode_addr, data_ptr, data_size, chunk);
+
+    // Spike-capture slot: keep this task's post-seed inputs in RAM so the
+    // wrapper can dump them if THIS task turns out to end in a bad seam.
+    if (psr_aspmain_spike_dir() != nullptr) {
+        memcpy(g_spike_dmem, dmem, 0x1000);
+        memcpy(&g_spike_ctx, ctx, sizeof(g_spike_ctx));
+        g_spike_ucode_addr = ucode_addr;
+        g_spike_data_ptr = data_ptr;
+        g_spike_data_size = data_size;
+        g_spike_chunk = chunk;
+        g_spike_slot_valid = true;
+    }
+
+    // Per-task tracing is opt-in via PSR_ASPMAIN_DEBUG; without it
+    // this fires every audio frame and floods stderr.
+    static const bool s_aspmain_debug = getenv("PSR_ASPMAIN_DEBUG") != nullptr;
+    if (s_aspmain_debug) {
+        fprintf(stderr,
+            "[aspmain_hook] %s: data_ptr=0x%08X data_size=0x%X chunk=0x%X "
+            "→ DMEM[0x%X], r29=0x2B0, r30=%u\n",
+            ucode_name ? ucode_name : "?",
+            data_ptr, data_size, chunk,
+            kAudioCommandsDmemOffset, chunk);
+
+        uint32_t n_cmds = (data_size > 320) ? 40 : (data_size / 8);
+        char ops[256];
+        char* p = ops;
+        for (uint32_t i = 0; i < n_cmds && (p - ops) < 240; i++) {
+            uint32_t addr = data_ptr + i * 8;
+            uint32_t off  = addr & 0xFFFFFF;
+            uint8_t b0 = rdram[off ^ 3];
+            p += snprintf(p, ops + sizeof(ops) - p, "%02X ", b0);
+        }
+        fprintf(stderr, "[aspmain_chunk0] ops: %s\n", ops);
+        fflush(stderr);
+    }
+}
+
+// ── Single-task replay capture (round-2 N64 crackle oracle, Milestone 1) ──
+// PSR_ASPMAIN_CAPTURE=<dir> dumps ONE real aspMain task's complete starting
+// state so it can be replayed through ares and diffed against our recompiled
+// RSP's output (which is the recompiled-RSP audio-accuracy bug we're hunting).
+// The hook (here) dumps the seeded register/DMEM state and arms the wrapper;
+// the wrapper around aspMain (main.cpp) dumps RDRAM before+after the task.
+// One-shot: captures the first audio task with a non-empty command list.
+namespace {
+    char     g_cap_dir[512] = {0};
+    int      g_cap_state    = -2;   // -2 unqueried, -1 disabled, 0 armed, 1 done
+}
+// Exposed to the aspMain wrapper in main.cpp.
+extern "C" const char* psr_aspmain_capture_dir(void) {
+    return (g_cap_state == 0) ? g_cap_dir : nullptr;
+}
+extern "C" void psr_aspmain_capture_done(void) { g_cap_state = 1; }
+
+// Runtime (re-)arm from the debug server: lets a capture be triggered
+// mid-session (e.g. right before a battle cry — the loudest crackle
+// content) instead of only at launch via PSR_ASPMAIN_CAPTURE, which
+// would one-shot on the first non-silent title-music task. Re-arming
+// after a completed capture is allowed; the next non-silent task
+// overwrites the dump files in `dir`.
+extern "C" int psr_aspmain_capture_arm(const char* dir) {
+    if (!dir || !*dir) return 0;
+    strncpy(g_cap_dir, dir, sizeof(g_cap_dir) - 1);
+    g_cap_dir[sizeof(g_cap_dir) - 1] = '\0';
+    g_cap_state = 0;
+    return 1;
+}
+// -2 unqueried, -1 disabled, 0 armed, 1 done — for debug-server polling.
+extern "C" int psr_aspmain_capture_state(void) { return g_cap_state; }
+
+static void aspmain_capture_input(uint8_t* rdram, ::RspContext* ctx,
+                                  uint32_t ucode_addr, uint32_t data_ptr,
+                                  uint32_t data_size, uint32_t chunk) {
+    if (g_cap_state == -2) {
+        const char* e = getenv("PSR_ASPMAIN_CAPTURE");
+        if (e && *e) { strncpy(g_cap_dir, e, sizeof(g_cap_dir) - 1); g_cap_state = 0; }
+        else g_cap_state = -1;
+    }
+    if (g_cap_state != 0) return;
+
+    char path[640];
+    // DMEM (4 KiB) — exact bytes the recompiled aspMain starts against.
+    snprintf(path, sizeof(path), "%s/dmem.bin", g_cap_dir);
+    if (FILE* f = fopen(path, "wb")) { fwrite(dmem, 1, 0x1000, f); fclose(f); }
+
+    // Seeded scalar context (r1..r31 + dma regs + entry) as a flat binary the
+    // replay harness reads to set ares' RSP registers identically.
+    snprintf(path, sizeof(path), "%s/ctx.bin", g_cap_dir);
+    if (FILE* f = fopen(path, "wb")) {
+        fwrite(&ctx->r1, sizeof(uint32_t), 31, f);            // r1..r31
+        fwrite(&ctx->dma_mem_address, sizeof(uint32_t), 1, f);
+        fwrite(&ctx->dma_dram_address, sizeof(uint32_t), 1, f);
+        fwrite(&ucode_addr, sizeof(uint32_t), 1, f);
+        fclose(f);
+    }
+    // Full RspContext, raw. ctx.bin above only carries the scalar GPRs +
+    // DMA registers; the wrapper's persistent context ALSO holds the
+    // vector unit (`RSP rsp`: v0..v31, accumulator, VCC/VCO/VCE, divide
+    // state) which persists across tasks exactly like on real hardware.
+    // The offline replayer (aspmain_replay.cpp) restores this blob
+    // byte-for-byte so the replayed task starts from EXACTLY the
+    // captured state. Only meaningful to the same (or ABI-identical)
+    // binary — the portable fields stay in ctx.bin/meta.txt.
+    snprintf(path, sizeof(path), "%s/ctx_full.bin", g_cap_dir);
+    if (FILE* f = fopen(path, "wb")) { fwrite(ctx, 1, sizeof(*ctx), f); fclose(f); }
+
+    // Human-readable metadata.
+    snprintf(path, sizeof(path), "%s/meta.txt", g_cap_dir);
+    if (FILE* f = fopen(path, "w")) {
+        fprintf(f, "ucode_addr=0x%08X\ndata_ptr=0x%08X\ndata_size=0x%X\nchunk=0x%X\n",
+                ucode_addr, data_ptr, data_size, chunk);
+        fprintf(f, "r28(data_ptr)=0x%08X r27(data_size)=0x%08X r29=0x%08X r30=%d\n",
+                ctx->r28, ctx->r27, ctx->r29, (int)ctx->r30);
+        fprintf(f, "dma_mem=0x%08X dma_dram=0x%08X r3=0x%08X r31=0x%08X\n",
+                ctx->dma_mem_address, ctx->dma_dram_address, ctx->r3, ctx->r31);
+        fclose(f);
+    }
+    fprintf(stderr, "[aspmain_capture] input state dumped to %s (DMEM+ctx+meta); "
+                    "wrapper will dump RDRAM before/after\n", g_cap_dir);
+    fflush(stderr);
+}
+
+void register_pre_task_hooks() {
+    ::recomp::rsp::set_pre_task_hook("aspMain", aspmain_pre_task);
+}
+
+}  // namespace pokestadium::rsp

@@ -1,0 +1,72 @@
+# User-provided ROMs
+*.n64
+*.v64
+*.z64
+
+# Cartridge and console save/state files
+*.gb
+*.gbc
+*.sav
+*.srm
+*.sra
+*.eep
+*.fla
+*.state
+
+# Decompilation outputs
+disasm/build/
+disasm/probes/
+generated/
+
+# Dependencies live in the workspace sibling decomp/ and toolchain/ trees.
+# Ignore obsolete per-game checkouts if an older setup script created them.
+/disasm/
+/n64recomp/
+/ares-emulator/
+
+# Durable probe-stats history (see tools/probe_stats.py) -- deliberately
+# outside disasm/build/ so a build clean cannot wipe candidate-runner history
+disasm/probe-stats/
+
+# Android/Gradle outputs and machine-local configuration
+.gradle/
+android/.gradle/
+android/local.properties
+android/**/build/
+
+# Local compiled helper
+/file_to_c
+
+# Native build outputs
+build*/
+*.apk
+*.so
+*.log
+*.tgz
+function_sizes.toml
+
+# Local runtime and FPS screenshots
+screenshots/
+
+# IDE files
+.idea/
+*.iml
+
+# Local debug/dev artifacts (screenshots, signed APKs, RAM dumps, staged APK contents)
+artifacts/
+$stage/
+
+# macOS Finder metadata
+.DS_Store
+
+__pycache__/
+
+.worktrees/
+
+# Cloned decompilation helpers (see tools/setup_decomp_tools.sh)
+disasm/tools/m2c/
+disasm/tools/decomp-permuter/
+disasm/tools/decomp-venv/
+
+# per-session git worktrees created by tooling sessions
+.claude/worktrees/
