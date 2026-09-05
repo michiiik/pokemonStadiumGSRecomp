@@ -1,0 +1,71 @@
+// Lower-screen companion snapshot layout — the single source of truth.
+//
+// Consumed twice:
+//   * C++  — src/main/companion_snapshot.h includes this as an X-macro list.
+//   * Java — android/app/build.gradle.kts regenerates CompanionSnapshot.java
+//            from these lines at build time. Never hand-edit that file.
+//
+// Naming: each side applies its own convention to the same names, so
+// PSR_COMPANION_BATTLE(PlayerSpecies, 0) becomes kBattlePlayerSpecies in C++
+// and BATTLE_PLAYER_SPECIES in Java.
+//
+// Ordering constraint: CONST entries must come first — the payload macros
+// expand against kPayloadBase / PAYLOAD_BASE.
+//
+// The snapshot is one flat int32 block published under a seqlock:
+//   [0 .. PayloadBase-1]  header, identical in every mode
+//   [PayloadBase .. ]     payload, reinterpreted per mode
+// Adding a mode means adding its own payload block below; the header never
+// changes shape, so an older reader can still identify a newer mode.
+
+PSR_COMPANION_CONST(SchemaVersion, 2)
+PSR_COMPANION_CONST(Capacity, 256)
+PSR_COMPANION_CONST(PayloadBase, 8)
+PSR_COMPANION_CONST(RosterSlots, 6)
+PSR_COMPANION_CONST(MoveSlots, 4)
+// The opponent HP bar is deliberately quantised to this many steps: it is the
+// coarse gauge the main screen already shows, never the exact value (T2 data).
+PSR_COMPANION_CONST(OpponentHpGaugeSteps, 48)
+
+PSR_COMPANION_MODE(Standby, 0)
+PSR_COMPANION_MODE(Battle, 1)
+PSR_COMPANION_MODE(OrderSelect, 2)
+
+PSR_COMPANION_FLAG(PlayerDetails, 0x1)
+
+PSR_COMPANION_HEADER(Version, 0)
+PSR_COMPANION_HEADER(Mode, 1)
+PSR_COMPANION_HEADER(PayloadWords, 2)
+PSR_COMPANION_HEADER(FrameCounter, 3)
+PSR_COMPANION_HEADER(Flags, 4)
+
+PSR_COMPANION_BATTLE(PlayerSpecies, 0)
+PSR_COMPANION_BATTLE(PlayerLevel, 1)
+PSR_COMPANION_BATTLE(PlayerCurrentHp, 2)
+PSR_COMPANION_BATTLE(PlayerMaxHp, 3)
+PSR_COMPANION_BATTLE(PlayerStatus, 4)
+PSR_COMPANION_BATTLE(PlayerType1, 5)
+PSR_COMPANION_BATTLE(PlayerType2, 6)
+PSR_COMPANION_BATTLE(PlayerAttack, 7)
+PSR_COMPANION_BATTLE(PlayerDefense, 8)
+PSR_COMPANION_BATTLE(PlayerSpeed, 9)
+PSR_COMPANION_BATTLE(PlayerSpecial, 10)
+// Base of MoveSlots consecutive entries.
+PSR_COMPANION_BATTLE(PlayerMove, 11)
+PSR_COMPANION_BATTLE(PlayerPp, 15)
+PSR_COMPANION_BATTLE(OpponentSpecies, 19)
+PSR_COMPANION_BATTLE(OpponentLevel, 20)
+PSR_COMPANION_BATTLE(OpponentHpGauge, 21)
+PSR_COMPANION_BATTLE(OpponentStatus, 22)
+PSR_COMPANION_BATTLE(OpponentType1, 23)
+PSR_COMPANION_BATTLE(OpponentType2, 24)
+PSR_COMPANION_WORDS(Battle, 25)
+
+// Base of RosterSlots consecutive entries.
+PSR_COMPANION_ORDER(RosterSpecies, 0)
+// Per slot: 0 = unselected, otherwise its 1-based battle order.
+PSR_COMPANION_ORDER(RosterOrder, 6)
+PSR_COMPANION_ORDER(SelectedCount, 12)
+PSR_COMPANION_ORDER(SelectionState, 13)
+PSR_COMPANION_ORDER(ConfirmationChoice, 14)
+PSR_COMPANION_WORDS(Order, 15)

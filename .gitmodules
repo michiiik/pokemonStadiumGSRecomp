@@ -1,0 +1,21 @@
+[submodule "disasm"]
+	path = disasm
+	url = https://github.com/michiiik/pokestadiumgs.git
+[submodule "n64recomp"]
+	path = n64recomp
+	url = https://github.com/michiiik/N64Recomp.git
+[submodule "lib/N64ModernRuntime"]
+	path = lib/N64ModernRuntime
+	url = https://github.com/michiiik/N64ModernRuntime.git
+[submodule "lib/rt64"]
+	path = lib/rt64
+	url = https://github.com/michiiik/rt64.git
+[submodule "recomp-ui"]
+	path = recomp-ui
+	url = https://github.com/michiiik/recomp-ui.git
+[submodule "lib/SDL2"]
+	path = lib/SDL2
+	url = https://github.com/libsdl-org/SDL.git
+[submodule "lib/adrenotools"]
+	path = lib/adrenotools
+	url = https://github.com/bylaws/libadrenotools.git

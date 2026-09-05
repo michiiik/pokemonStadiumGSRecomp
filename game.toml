@@ -1,0 +1,329 @@
+# Pokemon Stadium 2 (US)
+# N64Recomp input generated from pret/pokestadiumgs commit c0e10f23.
+
+[input]
+entrypoint = 0x80000400
+rom_file_path = "baserom.z64"
+elf_path = "disasm/build/pokestadiumgs-us.elf"
+output_func_path = "generated"
+relocatable_sections_path = "fragments_relocatable.txt"
+bss_section_suffix = "_bss"
+single_file_output = false
+functions_per_output_file = 50
+# Every fragment begins with an 8-byte header trampoline (a J to the fragment's
+# real entry, plus its delay slot). N64Recomp does not disassemble the textbin
+# header, so without a manual declaration there is no function at offset 0 and
+# the game's call into a freshly loaded fragment misses func_map. The lookup-miss
+# handler logs and RETURNS WITHOUT EXECUTING, so the fragment's init silently
+# never runs and any callback slot it was supposed to fill stays NULL — which is
+# how the battle aborted on a 0x00000000 function pointer.
+# Verified: all 88 fragments have opcode 2 (J) at offset 0. Same approach Stadium
+# 1 uses (it declares 77 of these).
+manual_funcs = [
+    { name = "func_8007BE88", section = ".text", vram = 0x8007BE88, size = 0x28 },
+    { name = "fragment1_entry", section = ".fragment1", vram = 0x83500000, size = 0x8 },
+    { name = "fragment2_entry", section = ".fragment2", vram = 0x81900000, size = 0x8 },
+    { name = "fragment3_entry", section = ".fragment3", vram = 0x81A00000, size = 0x8 },
+    { name = "fragment4_entry", section = ".fragment4", vram = 0x81800000, size = 0x8 },
+    { name = "fragment5_entry", section = ".fragment5", vram = 0x83200000, size = 0x8 },
+    { name = "fragment6_entry", section = ".fragment6", vram = 0x83100000, size = 0x8 },
+    { name = "fragment7_entry", section = ".fragment7", vram = 0x83000000, size = 0x8 },
+    { name = "fragment8_entry", section = ".fragment8", vram = 0x82F00000, size = 0x8 },
+    { name = "fragment9_entry", section = ".fragment9", vram = 0x8FB00000, size = 0x8 },
+    { name = "fragment10_entry", section = ".fragment10", vram = 0x82800000, size = 0x8 },
+    { name = "fragment11_entry", section = ".fragment11", vram = 0x81600000, size = 0x8 },
+    { name = "fragment12_entry", section = ".fragment12", vram = 0x81400000, size = 0x8 },
+    { name = "fragment13_entry", section = ".fragment13", vram = 0x82400000, size = 0x8 },
+    { name = "fragment14_entry", section = ".fragment14", vram = 0x81300000, size = 0x8 },
+    { name = "fragment15_entry", section = ".fragment15", vram = 0x83F00000, size = 0x8 },
+    { name = "fragment16_entry", section = ".fragment16", vram = 0x82000000, size = 0x8 },
+    { name = "fragment17_entry", section = ".fragment17", vram = 0x82200000, size = 0x8 },
+    { name = "fragment18_entry", section = ".fragment18", vram = 0x81700000, size = 0x8 },
+    { name = "fragment19_entry", section = ".fragment19", vram = 0x82300000, size = 0x8 },
+    { name = "fragment20_entry", section = ".fragment20", vram = 0x82600000, size = 0x8 },
+    { name = "fragment21_entry", section = ".fragment21", vram = 0x82500000, size = 0x8 },
+    { name = "fragment22_entry", section = ".fragment22", vram = 0x82700000, size = 0x8 },
+    { name = "fragment23_entry", section = ".fragment23", vram = 0x82A00000, size = 0x8 },
+    { name = "fragment24_entry", section = ".fragment24", vram = 0x82B00000, size = 0x8 },
+    { name = "fragment25_entry", section = ".fragment25", vram = 0x82100000, size = 0x8 },
+    { name = "fragment26_entry", section = ".fragment26", vram = 0x81000000, size = 0x8 },
+    { name = "fragment27_entry", section = ".fragment27", vram = 0x81100000, size = 0x8 },
+    { name = "fragment28_entry", section = ".fragment28", vram = 0x80000000, size = 0x8 },
+    { name = "fragment29_entry", section = ".fragment29", vram = 0x88000000, size = 0x8 },
+    { name = "fragment30_entry", section = ".fragment30", vram = 0x88100000, size = 0x8 },
+    { name = "fragment31_entry", section = ".fragment31", vram = 0x88200000, size = 0x8 },
+    { name = "fragment32_entry", section = ".fragment32", vram = 0x88300000, size = 0x8 },
+    { name = "fragment33_entry", section = ".fragment33", vram = 0x88400000, size = 0x8 },
+    { name = "fragment34_entry", section = ".fragment34", vram = 0x88500000, size = 0x8 },
+    { name = "fragment35_entry", section = ".fragment35", vram = 0x88600000, size = 0x8 },
+    { name = "fragment36_entry", section = ".fragment36", vram = 0x88700000, size = 0x8 },
+    { name = "fragment37_entry", section = ".fragment37", vram = 0x88800000, size = 0x8 },
+    { name = "fragment38_entry", section = ".fragment38", vram = 0x88900000, size = 0x8 },
+    { name = "fragment39_entry", section = ".fragment39", vram = 0x88A00000, size = 0x8 },
+    { name = "fragment40_entry", section = ".fragment40", vram = 0x88B00000, size = 0x8 },
+    { name = "fragment41_entry", section = ".fragment41", vram = 0x88C00000, size = 0x8 },
+    { name = "fragment42_entry", section = ".fragment42", vram = 0x88D00000, size = 0x8 },
+    { name = "fragment43_entry", section = ".fragment43", vram = 0x8AC00000, size = 0x8 },
+    { name = "fragment44_entry", section = ".fragment44", vram = 0x8AF00000, size = 0x8 },
+    { name = "fragment45_entry", section = ".fragment45", vram = 0x8AB00000, size = 0x8 },
+    { name = "fragment46_entry", section = ".fragment46", vram = 0x8AE00000, size = 0x8 },
+    { name = "fragment47_entry", section = ".fragment47", vram = 0x86000000, size = 0x8 },
+    { name = "fragment48_entry", section = ".fragment48", vram = 0x87C00000, size = 0x8 },
+    { name = "fragment49_entry", section = ".fragment49", vram = 0x86100000, size = 0x8 },
+    { name = "fragment50_entry", section = ".fragment50", vram = 0x86200000, size = 0x8 },
+    { name = "fragment51_entry", section = ".fragment51", vram = 0x86300000, size = 0x8 },
+    { name = "fragment52_entry", section = ".fragment52", vram = 0x86400000, size = 0x8 },
+    { name = "fragment53_entry", section = ".fragment53", vram = 0x86500000, size = 0x8 },
+    { name = "fragment54_entry", section = ".fragment54", vram = 0x86600000, size = 0x8 },
+    { name = "fragment55_entry", section = ".fragment55", vram = 0x86700000, size = 0x8 },
+    { name = "fragment56_entry", section = ".fragment56", vram = 0x86800000, size = 0x8 },
+    { name = "fragment57_entry", section = ".fragment57", vram = 0x83300000, size = 0x8 },
+    { name = "fragment58_entry", section = ".fragment58", vram = 0x83400000, size = 0x8 },
+    { name = "fragment59_entry", section = ".fragment59", vram = 0x86900000, size = 0x8 },
+    { name = "fragment60_entry", section = ".fragment60", vram = 0x86A00000, size = 0x8 },
+    { name = "fragment61_entry", section = ".fragment61", vram = 0x86B00000, size = 0x8 },
+    { name = "fragment62_entry", section = ".fragment62", vram = 0x86C00000, size = 0x8 },
+    { name = "fragment63_entry", section = ".fragment63", vram = 0x87E00000, size = 0x8 },
+    { name = "fragment64_entry", section = ".fragment64", vram = 0x87F00000, size = 0x8 },
+    { name = "fragment65_entry", section = ".fragment65", vram = 0x87D00000, size = 0x8 },
+    { name = "fragment66_entry", section = ".fragment66", vram = 0x82E00000, size = 0x8 },
+    { name = "fragment67_entry", section = ".fragment67", vram = 0x82900000, size = 0x8 },
+    { name = "fragment68_entry", section = ".fragment68", vram = 0x8F000000, size = 0x8 },
+    { name = "fragment69_entry", section = ".fragment69", vram = 0x8F100000, size = 0x8 },
+    { name = "fragment70_entry", section = ".fragment70", vram = 0x8F200000, size = 0x8 },
+    { name = "fragment71_entry", section = ".fragment71", vram = 0x8F300000, size = 0x8 },
+    { name = "fragment72_entry", section = ".fragment72", vram = 0x8F400000, size = 0x8 },
+    { name = "fragment73_entry", section = ".fragment73", vram = 0x8F500000, size = 0x8 },
+    { name = "fragment74_entry", section = ".fragment74", vram = 0x8F600000, size = 0x8 },
+    { name = "fragment75_entry", section = ".fragment75", vram = 0x8FA00000, size = 0x8 },
+    { name = "fragment76_entry", section = ".fragment76", vram = 0x8F700000, size = 0x8 },
+    { name = "fragment77_entry", section = ".fragment77", vram = 0x8F800000, size = 0x8 },
+    { name = "fragment78_entry", section = ".fragment78", vram = 0x8F900000, size = 0x8 },
+    { name = "fragment79_entry", section = ".fragment79", vram = 0x84100000, size = 0x8 },
+    { name = "fragment80_entry", section = ".fragment80", vram = 0x84200000, size = 0x8 },
+    { name = "fragment81_entry", section = ".fragment81", vram = 0x84300000, size = 0x8 },
+    { name = "fragment82_entry", section = ".fragment82", vram = 0x82D00000, size = 0x8 },
+    { name = "fragment83_entry", section = ".fragment83", vram = 0x82C00000, size = 0x8 },
+    { name = "fragment84_entry", section = ".fragment84", vram = 0x8FC00000, size = 0x8 },
+    { name = "fragment85_entry", section = ".fragment85", vram = 0x8FD00000, size = 0x8 },
+    { name = "fragment86_entry", section = ".fragment86", vram = 0x84400000, size = 0x8 },
+    { name = "fragment87_entry", section = ".fragment87", vram = 0x81B00000, size = 0x8 },
+    { name = "fragment88_entry", section = ".fragment88", vram = 0x81C00000, size = 0x8 },
+]
+
+# Indirect/jump-table target inside the resident section that the CFG walk
+# cannot see (the runtime classifies it "runtime code section index=0 ...
+# offset=0x2162C", i.e. a real resident address with no function entry).
+force_function_vrams = [0x80021A2C]
+
+# ── Runtime fragment registration hook ────────────────────────────────────
+#
+# Stadium has two fragment-load paths: (1) PI DMA → load_overlays(), which
+# registers funcs in func_map at the runtime address each section was DMA'd
+# to; and (2) CPU-side decompression, which writes fragment bytes to RDRAM by
+# direct stores and so never reaches do_dma. Path (2) fragments are invisible
+# to load_overlays and the trampoline scanner, so calls to their entry points
+# miss func_map and the guest ends up executing garbage.
+#
+# Both paths converge on Memmap_RelocateFragment(id, fragment_ptr) before the
+# fragment is dispatched. Stadium 1 hooks that chokepoint; Stadium 2 had no
+# hook at all, which is why its second overlay-backed scene crashed.
+#
+# Identified by instruction-shape matching against Stadium 1's
+# Memmap_RelocateFragment (0x80001E50, 0x260 bytes): 100% of 152 instruction
+# shapes match, the next best candidate scores 7.9%, and the 0x180-byte
+# prologue is identical. That match is now recorded in tools/s1_transfer.json
+# and applied, so this is Memmap_RelocateFragment in the ELF -- it was
+# func_80002210 before the naming pass (see docs/NAMING.md).
+# Host librecomp provides osSetTime; suffix the generated wrapper.
+[patches]
+renamed = ["osSetTime"]
+
+[[patches.hook]]
+func = "Memmap_RelocateFragment"
+before_vram = 0x80002210  # first instr of Memmap_RelocateFragment => entry hook
+text = "{ ctx->fragment_runtime_base = (uint32_t)ctx->r5; recomp_register_runtime_fragment(rdram, ctx->r4, ctx->r5); }"
+
+[[patches.hook]]
+func = "Memmap_RelocateFragment"
+before_vram = 0x80002468  # jr $ra after the relocation walk
+text = "ctx->fragment_runtime_base = 0;"
+
+# Stadium 2's fragment-vaddr resolver is Memmap_GetFragmentVaddr, formerly
+# func_800024A0. Its native table has
+# one pointer per fragment id, but the recompiler can keep multiple pattern
+# variants resident at once. Save the lookup literal at entry and resolve it
+# against the active fragment instance at the resolver's return point.
+[[patches.hook]]
+func = "Memmap_GetFragmentVaddr"
+before_vram = 0x800024A0
+text = "librecomp_fragment_input_push((uint32_t)ctx->r4);"
+
+[[patches.hook]]
+func = "Memmap_GetFragmentVaddr"
+before_vram = 0x800024FC
+text = "ctx->r4 = librecomp_fragment_resolve_exit((uint32_t)ctx->r4, (uint32_t)ctx->fragment_runtime_base);"
+
+# Expand the Prime Cup and Poké Cup rental tables in the Stadium 2 source-side
+# blob. The helper inserts only missing species in sorted order, preserves the
+# table-3/table-4 shared offset, and repairs directory sizes and total_size.
+[[patches.hook]]
+func = "func_80006ACC"
+before_vram = 0x80006B38
+text = """
+{
+    const uint32_t base = 0x2492B0u;
+    const uint32_t table1 = base + 0xCB0u;
+    const uint32_t table2 = base + 0x23D0u;
+    const uint32_t table3 = base + 0x3B20u;
+    const uint32_t tail_end = base + 0xFE90u;
+    const uint32_t record_size = 0x18u;
+    /* Each expanded table gains records but loses eight bytes of old pad. */
+    const uint32_t shift1 = 0x70u;
+    const uint32_t shift2 = 0x40u;
+    const uint32_t shift3 = 0x70u;
+    const uint32_t total_shift = shift1 + shift2 + shift3;
+    const uint8_t added[5][24] = {
+        {0x64, 0x96, 0x00, 0x00, 0x5E, 0xDB, 0x42, 0x55, 0x00, 0x7F,
+         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+         0x00, 0x00, 0x00, 0x00},
+        {0x64, 0x97, 0x00, 0x00, 0x5E, 0xF6, 0x76, 0x94, 0x00, 0x7F,
+         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+         0x00, 0x00, 0x00, 0x00},
+        {0x64, 0xF9, 0x00, 0x00, 0x5E, 0xDB, 0x59, 0xB1, 0x00, 0x7F,
+         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+         0x00, 0x00, 0x00, 0x00},
+        {0x64, 0xFA, 0x00, 0x00, 0x57, 0xCA, 0x59, 0xDD, 0x00, 0x7F,
+         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+         0x00, 0x00, 0x00, 0x00},
+        {0x64, 0xFB, 0x00, 0x00, 0xCA, 0xF6, 0xF8, 0xD7, 0x00, 0x7F,
+         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+         0x00, 0x00, 0x00, 0x00}
+    };
+
+    if (rdram[table1 ^ 3u] == 246u && rdram[table2 ^ 3u] == 248u &&
+        rdram[table3 ^ 3u] == 246u) {
+        const uint32_t insert[13] = {
+            table1 + 4u + 246u * record_size,
+            table1 + 4u + 246u * record_size,
+            table1 + 4u + 246u * record_size,
+            table1 + 4u + 149u * record_size,
+            table1 + 4u + 149u * record_size,
+            table2 + shift1 + 4u + 247u * record_size,
+            table2 + shift1 + 4u + 247u * record_size,
+            table2 + shift1 + 4u + 149u * record_size,
+            table3 + shift1 + shift2 + 4u + 246u * record_size,
+            table3 + shift1 + shift2 + 4u + 246u * record_size,
+            table3 + shift1 + shift2 + 4u + 246u * record_size,
+            table3 + shift1 + shift2 + 4u + 149u * record_size,
+            table3 + shift1 + shift2 + 4u + 149u * record_size
+        };
+        const uint8_t record[13] = {4u, 3u, 2u, 1u, 0u, 3u, 2u, 0u,
+                                    4u, 3u, 2u, 1u, 0u};
+        uint32_t end = tail_end;
+        uint32_t i;
+        uint32_t k;
+        for (k = 0; k < 13u; ++k) {
+            uint32_t j;
+            for (i = end; i != insert[k]; ) {
+                --i;
+                rdram[(i + record_size) ^ 3u] = rdram[i ^ 3u];
+            }
+            for (j = 0; j < record_size; ++j) {
+                rdram[(insert[k] + j) ^ 3u] = added[record[k]][j];
+            }
+            end += record_size;
+            if (k == 4u || k == 7u || k == 12u) {
+                const uint32_t compact = (k == 4u) ? table1 + 0x1790u :
+                    ((k == 7u) ? table2 + shift1 + 0x1790u :
+                                 table3 + shift1 + shift2 + 0x1790u);
+                for (i = compact; i < end; ++i) {
+                    rdram[(i - 8u) ^ 3u] = rdram[i ^ 3u];
+                }
+                end -= 8u;
+            }
+        }
+        rdram[table1 ^ 3u] = 251u;
+        rdram[(table2 + shift1) ^ 3u] = 251u;
+        rdram[(table3 + shift1 + shift2) ^ 3u] = 251u;
+
+        for (i = 2u; i < 72u; ++i) {
+            const uint32_t info = base + 0x10u + i * 0x10u;
+            const uint32_t offset_shift = (i == 2u) ? shift1 :
+                ((i < 5u) ? (shift1 + shift2) : total_shift);
+            uint32_t value = ((uint32_t)rdram[(info + 0u) ^ 3u] << 24) |
+                             ((uint32_t)rdram[(info + 1u) ^ 3u] << 16) |
+                             ((uint32_t)rdram[(info + 2u) ^ 3u] << 8) |
+                             (uint32_t)rdram[(info + 3u) ^ 3u];
+            value += offset_shift;
+            rdram[(info + 0u) ^ 3u] = (uint8_t)(value >> 24);
+            rdram[(info + 1u) ^ 3u] = (uint8_t)(value >> 16);
+            rdram[(info + 2u) ^ 3u] = (uint8_t)(value >> 8);
+            rdram[(info + 3u) ^ 3u] = (uint8_t)value;
+        }
+        /* table sizes and blob total_size are part of the verified format. */
+        for (i = 1u; i <= 4u; ++i) {
+            const uint32_t info = base + 0x10u + i * 0x10u;
+            rdram[(info + 4u) ^ 3u] = 0x00u;
+            rdram[(info + 5u) ^ 3u] = 0x00u;
+            rdram[(info + 6u) ^ 3u] = 0x17u;
+            rdram[(info + 7u) ^ 3u] = 0x90u;
+        }
+        rdram[(base + 8u) ^ 3u] = 0x00u;
+        rdram[(base + 9u) ^ 3u] = 0x00u;
+        rdram[(base + 10u) ^ 3u] = 0xFFu;
+        rdram[(base + 11u) ^ 3u] = 0xB0u;
+    }
+}
+"""
+
+# ── CPU-decompressed dynamic fragment slot ────────────────────────────────
+#
+# Stadium's second fragment-load path decompresses fragment bodies straight
+# into RDRAM with CPU stores, so the recompiler never sees them as ELF
+# sections and cannot synthesize code for them. Stadium 1 declares its slots
+# explicitly; Stadium 2 declared none, so every fragment arriving this way was
+# invisible and calls into it missed func_map.
+#
+# The slot is 0x8FF00000, confirmed at runtime: the registration hook above
+# recorded Memmap_RelocateFragment(id=0xEF, ptr=0x806788E0), and Stadium's own
+# encoding id = ((vram & 0x0FF00000) >> 20) - 0x10 gives 0xEF <=> 0x8FF00000.
+# Same slot and wrapper format Stadium 1 uses for its primary dynamic-asset
+# stream.
+[[input.decompressed_section_pattern]]
+base_name      = "frag_8FF00000"
+vram           = 0x8FF00000
+wrapper_format = "pers_szp_yay0"
+
+# One wrapper in the 0x8FF00000 stream declares a sizeInRam (header +0x1C)
+# that runs past its decompressed blob, because its trailing BSS is not
+# materialized in the compressed data. N64Recomp treats that as a malformed
+# header and aborts the whole pattern, even though the section is bounded by
+# relocOffset (+0x14 = 0x11120), which is inside the blob. Clamp sizeInRam to
+# the blob size so synthesis proceeds; nothing downstream reads this field for
+# sizing.
+[[input.decompressed_section_patch]]
+rom_wrapper = 0x29E2270
+offset      = 0x1C
+value       = 0x11630
+
+# A second decompressed stream carries fragment id 0 (link vram 0x81000000).
+# Evidence: the runtime reports
+#   [reg-frag] id=0x0 REJECT oversized section[26] size=0x73A0 > sizeInRam=0x6790
+# — the ELF fragment for 0x81000000 is 0x73A0, but what the game actually
+# decompressed is 0x6790, so the resident section is the wrong variant and the
+# fragment is left unregistered. Its trampolines at 0x802439A8/B0/D0 and
+# 0x80243A90 then miss func_map. Declaring the slot lets the recompiler
+# synthesize the real variants; content-hash matching picks the right one.
+[[input.decompressed_section_pattern]]
+base_name      = "frag_81000000"
+vram           = 0x81000000
+wrapper_format = "pers_szp_yay0"
+
+# The decompressed streams produce hundreds of variants that all share the same
+# link-time symbol names (every 0x8FF00000 variant has its entry at vram
+# 0x8FF00020). Suffix the colliding symbols with their ROM offset; symbols that
+# do not collide are left unchanged. Same policy Stadium 1 uses.
+# Keep this table LAST: bare keys after it would bind to [output], not [input].
+[output]
+collision_policy = "suffix"
