@@ -41,7 +41,14 @@ if [ "$ACTUAL" != "$SHA" ]; then
     echo "Note: n64recomp HEAD ($ACTUAL) differs from the committed pin ($SHA)."
 fi
 
+ROM_SOURCE="$SCRIPT_DIR/baserom.z64"
 ROM_PATH="$DECOMP_DIR/baseroms/us/baserom.z64"
+if [ -f "$ROM_SOURCE" ] && [ ! -f "$ROM_PATH" ]; then
+    mkdir -p "$(dirname -- "$ROM_PATH")"
+    cp "$ROM_SOURCE" "$ROM_PATH"
+    echo "Staged baserom.z64 -> disasm/baseroms/us/"
+fi
+
 EXPECTED_MD5="1561c75d11cedf356a8ddb1a4a5f9d5d"
 if [ -f "$ROM_PATH" ]; then
     if command -v md5sum >/dev/null 2>&1; then
@@ -55,7 +62,7 @@ if [ -f "$ROM_PATH" ]; then
         echo "Stadium 2 baserom MD5 OK."
     fi
 else
-    echo "Note: place your legal Stadium 2 US ROM at $ROM_PATH"
+    echo "Note: place your legal Stadium 2 US ROM at $ROM_SOURCE or $ROM_PATH"
 fi
 
 if [ "${WITH_ARES:-0}" = "1" ]; then
