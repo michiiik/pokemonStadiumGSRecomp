@@ -1,22 +1,26 @@
 #!/usr/bin/env bash
-# Initialize and verify this repository's nested dependencies.
+# Initialize and verify this repository's committed public dependencies.
 
 set -euo pipefail
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 cd "$SCRIPT_DIR"
 
-git submodule update --init --recursive
+# N64Recomp contains an optional Ares gitlink whose historical object is not
+# available from the public Ares repository. Initialize every other committed
+# dependency recursively without making that optional oracle a prerequisite.
+git -c submodule.ares-bridge/third_party/ares.update=none submodule update --init --recursive
 
 DECOMP_DIR="$SCRIPT_DIR/disasm"
 N64RECOMP_DIR="$SCRIPT_DIR/n64recomp"
 RUNTIME_DIR="$SCRIPT_DIR/lib/N64ModernRuntime"
 RT64_DIR="$SCRIPT_DIR/lib/rt64"
 UI_DIR="$SCRIPT_DIR/recomp-ui"
+ARES_DIR="$N64RECOMP_DIR/ares-bridge/third_party/ares"
 
 require_repo() {
-    if [ ! -e "$1/.git" ]; then
-        echo "Error: required nested repository is missing: $1" >&2
+    if [ ! -e "$1/.git" ] || ! git -C "$1" rev-parse --git-dir >/dev/null 2>&1; then
+        echo "Error: required repository is missing: $1" >&2
         echo "Run 'git submodule update --init --recursive' from $SCRIPT_DIR." >&2
         exit 1
     fi
@@ -34,7 +38,7 @@ fi
 
 ACTUAL=$(git -C "$N64RECOMP_DIR" rev-parse HEAD)
 if [ "$ACTUAL" != "$SHA" ]; then
-    echo "Note: n64recomp HEAD ($ACTUAL) differs from the game pin ($SHA)."
+    echo "Note: n64recomp HEAD ($ACTUAL) differs from the committed pin ($SHA)."
 fi
 
 ROM_SOURCE="$SCRIPT_DIR/baserom.z64"
@@ -58,11 +62,19 @@ if [ -f "$ROM_PATH" ]; then
         echo "Stadium 2 baserom MD5 OK."
     fi
 else
-    echo "Note: place your legal Stadium 2 US ROM at $ROM_SOURCE"
+    echo "Note: place your legal Stadium 2 US ROM at $ROM_SOURCE or $ROM_PATH"
+fi
+
+if [ "${WITH_ARES:-0}" = "1" ]; then
+    if [ -e "$ARES_DIR/.git" ] && git -C "$ARES_DIR" rev-parse HEAD >/dev/null 2>&1; then
+        echo "Ares checkout is available."
+    else
+        echo "Note: optional Ares gitlink is unavailable; continuing without it." >&2
+    fi
 fi
 
 echo
-echo "Nested dependencies are available."
+echo "Repository dependencies are available."
 echo "  pokestadiumgs: $(git -C "$DECOMP_DIR" rev-parse --short HEAD)"
 echo "  N64Recomp:     $(git -C "$N64RECOMP_DIR" rev-parse --short HEAD)"
 echo

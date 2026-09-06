@@ -1,6 +1,6 @@
 # Exact N64Recomp revision used by this game.
 #
-# The setup script compares n64recomp HEAD with this pin.
+# The setup scripts compare the committed n64recomp gitlink with this pin.
 # Update the SHA deliberately when rolling the engine forward, then rebuild and
 # validate the game before committing the new value.
 #
