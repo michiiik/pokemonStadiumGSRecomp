@@ -1,9 +1,9 @@
 # Exact N64Recomp revision used by this game.
 #
-# The setup script compares n64recomp HEAD with this pin.
+# The workspace setup scripts compare ../../toolchain/N64Recomp HEAD with this pin.
 # Update the SHA deliberately when rolling the engine forward, then rebuild and
 # validate the game before committing the new value.
 #
 # Repository: https://github.com/michiiik/N64Recomp
 
-sha = 2b949c5c3f1c41dd76023e7626a6302a4a262a8a
+sha = ffb39cdad1da5de07eaaa48bd1db4a89a7986771
