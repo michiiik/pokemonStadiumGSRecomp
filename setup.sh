@@ -19,7 +19,7 @@ UI_DIR="$SCRIPT_DIR/recomp-ui"
 ARES_DIR="$N64RECOMP_DIR/ares-bridge/third_party/ares"
 
 require_repo() {
-    if ! git -C "$1" rev-parse --git-dir >/dev/null 2>&1; then
+    if [ ! -e "$1/.git" ] || ! git -C "$1" rev-parse --git-dir >/dev/null 2>&1; then
         echo "Error: required repository is missing: $1" >&2
         echo "Run 'git submodule update --init --recursive' from $SCRIPT_DIR." >&2
         exit 1
@@ -59,7 +59,7 @@ else
 fi
 
 if [ "${WITH_ARES:-0}" = "1" ]; then
-    if git -C "$ARES_DIR" rev-parse --git-dir >/dev/null 2>&1; then
+    if [ -e "$ARES_DIR/.git" ] && git -C "$ARES_DIR" rev-parse HEAD >/dev/null 2>&1; then
         echo "Ares checkout is available."
     else
         echo "Note: optional Ares gitlink is unavailable; continuing without it." >&2

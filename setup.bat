@@ -17,10 +17,14 @@ set "UI_DIR=%SCRIPT_DIR%recomp-ui"
 set "ARES_DIR=%N64RECOMP_DIR%\ares-bridge\third_party\ares"
 
 for %%D in ("%DECOMP_DIR%" "%N64RECOMP_DIR%" "%RUNTIME_DIR%" "%RT64_DIR%" "%UI_DIR%") do (
-    git -C "%%~D" rev-parse --git-dir >nul 2>&1
-    if errorlevel 1 (
+    if not exist "%%~D\.git" (
         echo Error: required repository is missing: %%~D
         echo Run git submodule update --init --recursive from %SCRIPT_DIR%.
+        exit /b 1
+    )
+    git -C "%%~D" rev-parse HEAD >nul 2>&1
+    if errorlevel 1 (
+        echo Error: required repository has no checked-out commit: %%~D
         exit /b 1
     )
 )
@@ -52,11 +56,15 @@ set "ROM_PATH=%DECOMP_DIR%\baseroms\us\baserom.z64"
 if not exist "%ROM_PATH%" echo Note: place your legal Stadium 2 US ROM at %ROM_PATH%
 
 if /I "%WITH_ARES%"=="1" (
-    git -C "%ARES_DIR%" rev-parse --git-dir >nul 2>&1
-    if errorlevel 1 (
+    if not exist "%ARES_DIR%\.git" (
         echo Note: optional Ares gitlink is unavailable; continuing without it.
     ) else (
-        echo Ares checkout is available.
+        git -C "%ARES_DIR%" rev-parse HEAD >nul 2>&1
+        if errorlevel 1 (
+            echo Note: optional Ares gitlink is unavailable; continuing without it.
+        ) else (
+            echo Ares checkout is available.
+        )
     )
 )
 
