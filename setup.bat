@@ -12,11 +12,13 @@ if errorlevel 1 exit /b 1
 set "DECOMP_DIR=%SCRIPT_DIR%disasm"
 set "N64RECOMP_DIR=%SCRIPT_DIR%n64recomp"
 set "RUNTIME_DIR=%SCRIPT_DIR%lib\N64ModernRuntime"
+set "SDL2_DIR=%SCRIPT_DIR%lib\SDL2"
+set "ADRENOTOOLS_DIR=%SCRIPT_DIR%lib\adrenotools"
 set "RT64_DIR=%SCRIPT_DIR%lib\rt64"
 set "UI_DIR=%SCRIPT_DIR%recomp-ui"
 set "ARES_DIR=%N64RECOMP_DIR%\ares-bridge\third_party\ares"
 
-for %%D in ("%DECOMP_DIR%" "%N64RECOMP_DIR%" "%RUNTIME_DIR%" "%RT64_DIR%" "%UI_DIR%") do (
+for %%D in ("%DECOMP_DIR%" "%N64RECOMP_DIR%" "%RUNTIME_DIR%" "%SDL2_DIR%" "%ADRENOTOOLS_DIR%" "%RT64_DIR%" "%UI_DIR%") do (
     if not exist "%%~D\.git" (
         echo Error: required repository is missing: %%~D
         echo Run git submodule update --init --recursive from %SCRIPT_DIR%.
