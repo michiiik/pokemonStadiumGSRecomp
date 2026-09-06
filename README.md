@@ -36,6 +36,11 @@ If the repository was cloned without submodules, initialize them with:
 git submodule update --init --recursive
 ```
 
+Generated recompiler sources are intentionally not tracked. On a fresh clone,
+run the documented generation pipeline before configuring CMake, or provide a
+local `generated/` tree; otherwise configuration fails because
+`generated/lookup.cpp` is missing.
+
 ### Windows
 
 Install Git, CMake 3.22 or newer, Ninja, and a supported C/C++ compiler
@@ -90,16 +95,17 @@ The following results were recorded against merge commit
 
 - On a clean Windows clone, `setup.bat` passed with all seven required
   dependencies. The optional Ares checkout was skipped.
-- Canonical CMake configuration reached MSVC detection, then failed because
-  CMake could not download SDL2 from GitHub in the restricted environment. An
-  offline configuration using a local SDL2 checkout generated successfully,
-  but full builds were not completed: MSVC hit the existing
-  `-Wno-unused-parameter` incompatibility, and ClangCL hit fmt `consteval`
+- Canonical Windows CMake configuration reached MSVC detection but was blocked
+  only because CMake could not download SDL2 from GitHub in the restricted
+  environment. Offline configuration with a local SDL2 checkout passed. Full
+  builds were not completed: the MSVC build failed at an unguarded
+  `-Wno-unused-parameter`, and the ClangCL build failed with fmt `consteval`
   errors.
 - Android `assembleDebug` was attempted with the external US Stadium 2 ROM
   (MD5 `1561c75d11cedf356a8ddb1a4a5f9d5d`), Gradle 8.9, JDK 21, and NDK
-  `27.2.12479018`. Dependency and native-cache issues blocked the attempt; no
-  Android build success is claimed.
+  `27.2.12479018`. AGP/network dependency resolution blocked the first
+  attempt; the offline retry then failed because `native-platform.dll` was
+  missing. No Android build success is claimed.
 - The Mac mini was not rerun because remote SSH/Tailscale access was
   unavailable in this session. From the repository root, rerun:
 
