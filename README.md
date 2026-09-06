@@ -97,23 +97,32 @@ The following results were recorded against merge commit
   dependencies. The optional Ares checkout was skipped.
 - Canonical Windows CMake configuration reached MSVC detection but was blocked
   only because CMake could not download SDL2 from GitHub in the restricted
-  environment. Offline configuration with a local SDL2 checkout passed. Full
-  builds were not completed: the MSVC build failed at an unguarded
-  `-Wno-unused-parameter`, and the ClangCL build failed with fmt `consteval`
-  errors.
+  environment. Offline configuration with the local `lib/SDL2` release
+  `2.30.3` checkout passed; because the Windows CMake path hardcodes a
+  prebuilt VC ZIP, `FETCHCONTENT_SOURCE_DIR_SDL2` was a validation-only
+  offline override. Full builds were not completed: the MSVC build failed at
+  an unguarded `-Wno-unused-parameter`, and the ClangCL build failed with fmt
+  `consteval` errors.
 - Android `assembleDebug` was attempted with the external US Stadium 2 ROM
   (MD5 `1561c75d11cedf356a8ddb1a4a5f9d5d`), Gradle 8.9, JDK 21, and NDK
   `27.2.12479018`. AGP/network dependency resolution blocked the first
   attempt; the offline retry then failed because `native-platform.dll` was
   missing. No Android build success is claimed.
-- The Mac mini was not rerun because remote SSH/Tailscale access was
-  unavailable in this session. From the repository root, rerun:
-
-  ```sh
-  git submodule update --init --recursive
-  cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
-  cmake --build build --target PokemonStadiumGSRecomp --parallel 2
-  ```
+- On the Mac mini (Darwin arm64), a fresh `main` clone with recursive
+  submodules and optional Ares skipped passed `./setup.sh` with all seven
+  required dependencies; `pokestadiumgs` was at `c0e10f2` and `N64Recomp` at
+  `2b949c5`. The matching external ROM was already present, so no ROM transfer
+  was needed. A disposable virtual environment installed the requirements;
+  `gmake extract` passed and a fresh `disasm/build/pokestadiumgs-us.elf` linked.
+- The current public `game.toml` hook names `Memmap_RelocateFragment` and
+  `Memmap_GetFragmentVaddr` do not exist in that fresh ELF (the actual symbols
+  are `func_80002210` and `func_800024A0`). A disposable config substituted
+  those names for validation only. N64Recomp generated 1,474 files (~4.7 GB)
+  with a validation-only fmt `consteval` workaround.
+- Mac CMake configuration passed with Homebrew SDL2. The full target compile
+  stopped in `generated/funcs_8.c` because `ctx->fragment_runtime_base` is
+  absent from the pinned `lib/N64ModernRuntime/N64Recomp/include/recomp.h`;
+  no executable was produced.
 
 ## License
 
