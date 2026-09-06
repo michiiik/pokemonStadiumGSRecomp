@@ -14,6 +14,8 @@ git -c submodule.ares-bridge/third_party/ares.update=none submodule update --ini
 DECOMP_DIR="$SCRIPT_DIR/disasm"
 N64RECOMP_DIR="$SCRIPT_DIR/n64recomp"
 RUNTIME_DIR="$SCRIPT_DIR/lib/N64ModernRuntime"
+SDL2_DIR="$SCRIPT_DIR/lib/SDL2"
+ADRENOTOOLS_DIR="$SCRIPT_DIR/lib/adrenotools"
 RT64_DIR="$SCRIPT_DIR/lib/rt64"
 UI_DIR="$SCRIPT_DIR/recomp-ui"
 ARES_DIR="$N64RECOMP_DIR/ares-bridge/third_party/ares"
@@ -26,7 +28,7 @@ require_repo() {
     fi
 }
 
-for dependency in "$DECOMP_DIR" "$N64RECOMP_DIR" "$RUNTIME_DIR" "$RT64_DIR" "$UI_DIR"; do
+for dependency in "$DECOMP_DIR" "$N64RECOMP_DIR" "$RUNTIME_DIR" "$SDL2_DIR" "$ADRENOTOOLS_DIR" "$RT64_DIR" "$UI_DIR"; do
     require_repo "$dependency"
 done
 
