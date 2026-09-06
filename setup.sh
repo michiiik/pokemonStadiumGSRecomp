@@ -6,14 +6,17 @@ set -euo pipefail
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 cd "$SCRIPT_DIR"
 
-git submodule update --init --recursive
+# N64Recomp contains an optional Ares gitlink whose historical object is not
+# available from the public Ares repository. Initialize every other committed
+# dependency recursively without making that optional oracle a prerequisite.
+git -c submodule.ares-bridge/third_party/ares.update=none submodule update --init --recursive
 
 DECOMP_DIR="$SCRIPT_DIR/disasm"
 N64RECOMP_DIR="$SCRIPT_DIR/n64recomp"
 RUNTIME_DIR="$SCRIPT_DIR/lib/N64ModernRuntime"
 RT64_DIR="$SCRIPT_DIR/lib/rt64"
 UI_DIR="$SCRIPT_DIR/recomp-ui"
-ARES_DIR="$SCRIPT_DIR/ares-emulator"
+ARES_DIR="$N64RECOMP_DIR/ares-bridge/third_party/ares"
 
 require_repo() {
     if ! git -C "$1" rev-parse --git-dir >/dev/null 2>&1; then
@@ -59,7 +62,7 @@ if [ "${WITH_ARES:-0}" = "1" ]; then
     if git -C "$ARES_DIR" rev-parse --git-dir >/dev/null 2>&1; then
         echo "Ares checkout is available."
     else
-        echo "Note: optional Ares checkout is absent; continuing without it." >&2
+        echo "Note: optional Ares gitlink is unavailable; continuing without it." >&2
     fi
 fi
 
