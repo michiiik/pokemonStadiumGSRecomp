@@ -83,6 +83,32 @@ launch; do not add it to the repository.
 This project is under active development; Android and macOS remain porting
 targets while the Windows native build is brought up.
 
+## Validation status (2026-09-06)
+
+The following results were recorded against merge commit
+`e02da8142920994b055d50d5f7850f25f5364726`:
+
+- On a clean Windows clone, `setup.bat` passed with all seven required
+  dependencies. The optional Ares checkout was skipped.
+- Canonical CMake configuration reached MSVC detection, then failed because
+  CMake could not download SDL2 from GitHub in the restricted environment. An
+  offline configuration using a local SDL2 checkout generated successfully,
+  but full builds were not completed: MSVC hit the existing
+  `-Wno-unused-parameter` incompatibility, and ClangCL hit fmt `consteval`
+  errors.
+- Android `assembleDebug` was attempted with the external US Stadium 2 ROM
+  (MD5 `1561c75d11cedf356a8ddb1a4a5f9d5d`), Gradle 8.9, JDK 21, and NDK
+  `27.2.12479018`. Dependency and native-cache issues blocked the attempt; no
+  Android build success is claimed.
+- The Mac mini was not rerun because remote SSH/Tailscale access was
+  unavailable in this session. From the repository root, rerun:
+
+  ```sh
+  git submodule update --init --recursive
+  cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+  cmake --build build --target PokemonStadiumGSRecomp --parallel 2
+  ```
+
 ## License
 
 The project code is distributed under GPL-3.0; see `COPYING`. Bundled fonts,
