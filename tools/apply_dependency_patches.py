@@ -12,6 +12,11 @@ trampolines, main.cpp Windows watchpage, CMakeLists Stadium-2 wiring, the
 aspMain_ps2 audio ucode) are already committed in this repository, so they are
 intentionally absent here -- only submodule-targeted deltas remain.
 
+One patch (the `fragment_runtime_base` addition to the nested N64Recomp inside
+lib/N64ModernRuntime) is authored against a newer N64Recomp commit than the
+nested submodule is pinned at, so it carries a checkout target: the script
+detaches that submodule at the target commit before applying the patch.
+
 Run from the repo root (setup.bat invokes this):
     py -3 tools/apply_dependency_patches.py
 """
@@ -22,6 +27,10 @@ import tempfile
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+
+# Full SHA the nested runtime N64Recomp must be at for the fragment-base patch
+# to apply (the recorded pin predates recomp_context.dispatch_entry_rejected).
+NESTED_N64RECOMP_TARGET = "c955b4e03fc42e75877b27901424c75ee7fe7be5"
 
 _COMBINED = r'''diff --git a/src/decompressed.cpp b/src/decompressed.cpp
 index 05ab587..50c3ba7 100644
@@ -372,40 +381,53 @@ index 3edf457..0853a1a 100644
 '''
 
 
-# (submodule path relative to repo root, human-readable label, unified diff)
+# (submodule path relative to repo root, human-readable label, unified diff,
+#  optional pre-apply checkout target)
 PATCHES = [
     (
         "n64recomp",
         "N64Recomp engine: synthetic ROM pool base, SHN_ABS fragment relocation, "
         "static-seeds gate, JAL lookup",
         _COMBINED,
+        None,
     ),
     (
         "lib/N64ModernRuntime",
         "N64ModernRuntime: PI queue, AI VI-rate guard, int-mask return value, "
         "mesg-queue guard",
         _RUNTIME,
+        None,
     ),
     (
         "lib/N64ModernRuntime/N64Recomp",
         "nested N64Recomp: fragment_runtime_base / fragment_section_index on "
         "recomp_context",
         _FRAGMENT_BASE,
+        NESTED_N64RECOMP_TARGET,
     ),
     (
         "lib/rt64",
         "rt64: imgui 1.91.x LoadFunctions / IME-hook compatibility",
         _RT64_IMGUI,
+        None,
     ),
     (
         "recomp-ui",
         "recomp-ui: rewrite u8 string literals to UTF-8 byte escapes",
         _RECOMP_UI_U8,
+        None,
     ),
 ]
 
 
-def apply_patch(submodule_rel, label, patch_text):
+def _run_git(target, *args):
+    return subprocess.run(
+        ["git", "-C", str(target)] + list(args),
+        capture_output=True, text=True,
+    )
+
+
+def apply_patch(submodule_rel, label, patch_text, checkout_target=None):
     target = REPO_ROOT / submodule_rel
     if not (target / ".git").exists():
         print("[skip] %s: not a checked-out repo (missing .git)" % submodule_rel)
@@ -418,19 +440,30 @@ def apply_patch(submodule_rel, label, patch_text):
         tmp = fh.name
 
     try:
-        rev = subprocess.run(
-            ["git", "-C", str(target), "apply", "--check", "--reverse",
-             "--whitespace=nowarn", tmp],
-            capture_output=True, text=True,
-        )
+        # Idempotency: if the reverse applies cleanly, the patch is already in
+        # and there is nothing to do.
+        rev = _run_git(target, "apply", "--check", "--reverse", "--whitespace=nowarn", tmp)
         if rev.returncode == 0:
             print("[ok   ] %-38s already applied  (%s)" % (submodule_rel, label))
             return True
 
-        fwd = subprocess.run(
-            ["git", "-C", str(target), "apply", "--whitespace=nowarn", tmp],
-            capture_output=True, text=True,
-        )
+        # Not applied yet. If the patch was authored against a newer commit
+        # than this submodule's pin, detach it at the target first so the
+        # context matches.
+        if checkout_target:
+            fetch = _run_git(target, "fetch", "origin")
+            if fetch.returncode != 0:
+                print("[FAIL ] %-38s fetch failed   (%s)" % (submodule_rel, label))
+                sys.stderr.write((fetch.stderr or "").strip() + "\n")
+                return False
+            co = _run_git(target, "checkout", "--detach", checkout_target)
+            if co.returncode != 0:
+                print("[FAIL ] %-38s checkout failed (%s)" % (submodule_rel, label))
+                sys.stderr.write((co.stderr or "").strip() + "\n")
+                return False
+            print("[bump ] %-38s detached @ %.10s  (%s)" % (submodule_rel, checkout_target, label))
+
+        fwd = _run_git(target, "apply", "--whitespace=nowarn", tmp)
         if fwd.returncode == 0:
             print("[apply] %-38s applied        (%s)" % (submodule_rel, label))
             return True
@@ -444,8 +477,8 @@ def apply_patch(submodule_rel, label, patch_text):
 
 def main():
     ok = True
-    for rel, label, patch_text in PATCHES:
-        if not apply_patch(rel, label, patch_text):
+    for rel, label, patch_text, checkout_target in PATCHES:
+        if not apply_patch(rel, label, patch_text, checkout_target):
             ok = False
     print()
     if ok:
