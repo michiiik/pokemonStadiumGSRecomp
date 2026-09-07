@@ -516,21 +516,5 @@ add_custom_command(TARGET PokemonStadiumGSRecomp POST_BUILD
         "$<TARGET_FILE_DIR:PokemonStadiumGSRecomp>/assets"
 )
 
-# The overlay runtime JIT loads TinyCC dynamically. Stage the vendored Windows
-# toolchain beside the executable so the runtime can resolve libtcc.dll and its
-# libtcc1-64.a/include files without relying on PATH or a developer checkout.
-if (WIN32)
-    set(PSR_TCC_TOOLCHAIN_DIR "${N64MODERN_RUNTIME_ROOT}/N64Recomp/lib/tcc")
-    if (EXISTS "${PSR_TCC_TOOLCHAIN_DIR}/libtcc.dll")
-        add_custom_command(TARGET PokemonStadiumGSRecomp POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_directory
-                "${PSR_TCC_TOOLCHAIN_DIR}"
-                "$<TARGET_FILE_DIR:PokemonStadiumGSRecomp>/tcc"
-            COMMENT "Staging vendored TinyCC toolchain"
-        )
-    else()
-        message(WARNING
-            "Bundled TinyCC was not found at ${PSR_TCC_TOOLCHAIN_DIR}; "
-            "runtime overlay JIT will be unavailable until the recursive submodules are initialized.")
-    endif()
-endif()
+# N64Recomp owns the vendored TinyCC layout and stages it for this runner.
+n64recomp_stage_tcc(PokemonStadiumGSRecomp)

@@ -317,7 +317,7 @@ value       = 0x11630
 [[input.decompressed_section_pattern]]
 base_name      = "frag_81000000"
 vram           = 0x81000000
-wrapper_format = "pers_szp_yay0"
+wrapper_format = "raw_fragment"
 
 # The decompressed streams produce hundreds of variants that all share the same
 # link-time symbol names (every 0x8FF00000 variant has its entry at vram
