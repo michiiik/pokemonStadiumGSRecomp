@@ -36,6 +36,9 @@
 #include <string>
 
 #include "post_mortem.hpp"
+
+extern "C" void psr_dump_input_history_json(const char* path);
+
 #include "app_paths.h"
 
 // ── External hooks into existing rings/counters ──────────────────────
@@ -880,7 +883,6 @@ extern "C" void psr_post_mortem_dump(const char* reason,
 
     // Separate file: input history (so the replay tool doesn't need
     // to parse the multi-MB main report). Empty if no input was driven.
-    extern void psr_dump_input_history_json(const char* path);
     const std::string input_history_file =
         pkmnstadium::app_file("last_run_input_history.json").string();
     psr_dump_input_history_json(input_history_file.c_str());

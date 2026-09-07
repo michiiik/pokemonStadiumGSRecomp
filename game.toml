@@ -133,34 +133,33 @@ force_function_vrams = [0x80021A2C]
 # Memmap_RelocateFragment (0x80001E50, 0x260 bytes): 100% of 152 instruction
 # shapes match, the next best candidate scores 7.9%, and the 0x180-byte
 # prologue is identical. That match is now recorded in tools/s1_transfer.json
-# and applied, so this is Memmap_RelocateFragment in the ELF -- it was
-# func_80002210 before the naming pass (see docs/NAMING.md).
-# Host librecomp provides osSetTime; suffix the generated wrapper.
+# and applied. The public disassembly currently exposes the ELF symbol as
+# func_80002210, so keep the hook keyed to that stable generated name.
+# Host librecomp provides osSetTime; omit the ROM implementation.
 [patches]
-renamed = ["osSetTime"]
+ignored = ["osSetTime"]
 
 [[patches.hook]]
-func = "Memmap_RelocateFragment"
+func = "func_80002210"
 before_vram = 0x80002210  # first instr of Memmap_RelocateFragment => entry hook
 text = "{ ctx->fragment_runtime_base = (uint32_t)ctx->r5; recomp_register_runtime_fragment(rdram, ctx->r4, ctx->r5); }"
 
 [[patches.hook]]
-func = "Memmap_RelocateFragment"
+func = "func_80002210"
 before_vram = 0x80002468  # jr $ra after the relocation walk
 text = "ctx->fragment_runtime_base = 0;"
 
-# Stadium 2's fragment-vaddr resolver is Memmap_GetFragmentVaddr, formerly
-# func_800024A0. Its native table has
+# Stadium 2's fragment-vaddr resolver is exposed as func_800024A0. Its native table has
 # one pointer per fragment id, but the recompiler can keep multiple pattern
 # variants resident at once. Save the lookup literal at entry and resolve it
 # against the active fragment instance at the resolver's return point.
 [[patches.hook]]
-func = "Memmap_GetFragmentVaddr"
+func = "func_800024A0"
 before_vram = 0x800024A0
 text = "librecomp_fragment_input_push((uint32_t)ctx->r4);"
 
 [[patches.hook]]
-func = "Memmap_GetFragmentVaddr"
+func = "func_800024A0"
 before_vram = 0x800024FC
 text = "ctx->r4 = librecomp_fragment_resolve_exit((uint32_t)ctx->r4, (uint32_t)ctx->fragment_runtime_base);"
 
