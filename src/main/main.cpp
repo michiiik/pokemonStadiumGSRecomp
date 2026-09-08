@@ -850,6 +850,25 @@ static RspExitReason aspMain_skip(uint8_t* rdram, uint32_t ucode_addr) {
     return RspExitReason::Broke;
 }
 
+// Stadium 2 can submit a zero-filled audio buffer while the CPU audio
+// producer is still being initialized. Do not feed that buffer to aspMain:
+// its reserved command opcodes eventually resolve to the 0x7FFF sentinel.
+static RspExitReason aspMain_empty(uint8_t* rdram, uint32_t ucode_addr) {
+    (void)rdram;
+    (void)ucode_addr;
+    return RspExitReason::Broke;
+}
+
+static bool aspMain_cmdlist_is_zero(uint8_t* rdram, const OSTask* task) {
+    const uint32_t size = (uint32_t)task->t.data_size;
+    if (size == 0 || size > 0x10000u) return false;
+    const uint32_t paddr = (uint32_t)task->t.data_ptr & 0xFFFFFFu;
+    if ((uint64_t)paddr + size > 0x800000u) return false;
+    for (uint32_t i = 0; i < size; ++i) {
+        if (rdram[(paddr + i) ^ 3] != 0) return false;
+    }
+    return true;
+}
 static RspExitReason aspMain_capture(uint8_t* rdram, uint32_t ucode_addr) {
     const char* dir = psr_aspmain_capture_dir();
     const char* spike_base = psr_aspmain_spike_dir();
@@ -996,6 +1015,8 @@ static RspUcodeFunc* get_rsp_microcode(uint8_t* rdram, const OSTask* task) {
 
     switch (task->t.type) {
         case M_AUDTASK:
+            // A zero-filled startup buffer is not a valid aspMain command list.
+            if (aspMain_cmdlist_is_zero(rdram, task)) return aspMain_empty;
             // Always-on: snapshot the CPU-built Acmd list before it runs.
             audcmd_record(rdram, task);
             // Stadium 2's own recompiled microcode (rsp/aspMain_ps2.cpp,
@@ -2721,6 +2742,10 @@ int main(int argc, char** argv) {
     pokestadium::register_overlays();
     std::fprintf(stderr, "[PSR] overlays registered\n"); std::fflush(stderr);
 
+    // Stadium 2 uses the aspMain_ps2 RSP task; register its boot-state hook.
+    pokestadium::rsp::register_pre_task_hooks();
+    std::fprintf(stderr, "[PSR] rsp pre-task hooks registered\n"); std::fflush(stderr);
+
 #if 0 // Stadium 1 RSP/audio address registrations; not valid for Stadium 2.
     // Register RSP pre-task hooks. Stadium's aspMain (the standard
     // libultra audio ucode, stripped variant at ROM 0x68020) skips
@@ -2838,7 +2863,7 @@ int main(int argc, char** argv) {
             ofn.lpstrFilter = "N64 ROM (*.z64;*.n64;*.v64)\0*.z64;*.n64;*.v64\0All Files (*.*)\0*.*\0";
             ofn.lpstrFile   = picked;
             ofn.nMaxFile    = MAX_PATH;
-            ofn.lpstrTitle  = "Select Pokemon Stadium (US v1.0) ROM";
+            ofn.lpstrTitle  = "Select Pokemon Stadium 2 (US v1.0) ROM";
             ofn.Flags       = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_HIDEREADONLY;
             if (!GetOpenFileNameA(&ofn)) return false;
             out = picked;
@@ -2893,15 +2918,15 @@ int main(int argc, char** argv) {
                     case recomp::RomValidationError::NotARom:         err_name = "not a recognizable N64 ROM"; break;
                     case recomp::RomValidationError::IncorrectRom:    err_name = "wrong game"; break;
                     case recomp::RomValidationError::NotYet:          err_name = "not yet supported"; break;
-                    case recomp::RomValidationError::IncorrectVersion:err_name = "wrong region/revision (need US v1.0)"; break;
+                    case recomp::RomValidationError::IncorrectVersion:err_name = "wrong region/revision (need Stadium 2 US v1.0)"; break;
                     default:                                          err_name = "validation error"; break;
                 }
                 std::fprintf(stderr, "[PSR] select_rom error: %d (%s)\n", (int)err, err_name); std::fflush(stderr);
 #ifdef _WIN32
                 std::string msg = "The selected ROM did not validate (" + std::string(err_name) + ").\n\n"
                                   "Path: " + rom_path.string() + "\n\n"
-                                  "Required: Pokemon Stadium (US v1.0)\n"
-                                  "Required MD5: ed1378bc12115f71209a77844965ba50\n\n"
+                                  "Required: Pokemon Stadium 2 (US v1.0)\n"
+                                  "Required MD5: 1561c75d11cedf356a8ddb1a4a5f9d5d\n\n"
                                   "Please select the correct ROM.";
                 MessageBoxA(NULL, msg.c_str(), "PokemonStadiumGSRecomp â€” wrong ROM", MB_ICONWARNING | MB_OK);
 #endif

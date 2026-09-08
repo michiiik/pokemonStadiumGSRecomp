@@ -83,6 +83,13 @@ launch; do not add it to the repository.
 This project is under active development; Android and macOS remain porting
 targets while the Windows native build is brought up.
 
+### Validation status
+
+Native Windows boot and rendering were verified by the user after an incremental
+build with the interpreter return fix, oversized overlay guard, and audio startup
+handling. A fresh-clone build and full gameplay have not been verified. macOS and
+Android builds remain unverified for this update.
+
 ## License
 
 The project code is distributed under GPL-3.0; see `COPYING`. Bundled fonts,

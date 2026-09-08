@@ -349,7 +349,7 @@ bool run(const char* rom_path_in, char* out_rom, std::size_t out_len) {
     // required by the project). The launcher hashes the picked ROM and shows
     // "verified" on a match, so its check agrees with the runtime's real gate.
     static const char* const kStadiumSha1[] = {
-        "ed7bef5a306f88c0a6e96b15e71fee2ef32058f3",
+        "d8343e69a7dc63b869cf6361d87cde64444281d3",
     };
     gi.known_sha1_hex = kStadiumSha1;
     gi.num_known_sha1 = 1;
