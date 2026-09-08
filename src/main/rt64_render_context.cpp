@@ -407,6 +407,10 @@ void pokestadium::renderer::RT64Context::send_dl(const OSTask* task) {
     }
     app->state->rsp->reset();
     app->interpreter->loadUCodeGBI(task->t.ucode & 0x3FFFFFF, task->t.ucode_data & 0x3FFFFFF, true);
+    // Recompiled display lists can reference native KSEG image addresses
+    // beyond the original RDRAM range. Do not interpret them as segments.
+    // RT64 clears extended state after each workload, so enable per submission.
+    app->state->setExtendedRDRAM(true);
     app->processDisplayLists(app->core.RDRAM, task->t.data_ptr & 0x3FFFFFF, 0, true);
 }
 

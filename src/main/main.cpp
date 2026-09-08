@@ -999,9 +999,8 @@ static RspUcodeFunc* get_rsp_microcode(uint8_t* rdram, const OSTask* task) {
             // Always-on: snapshot the CPU-built Acmd list before it runs.
             audcmd_record(rdram, task);
             // Stadium 2's own recompiled microcode (rsp/aspMain_ps2.cpp,
-            // built from ROM 0x1060 + rspboot at ROM 0xB70; see
-            // tools/build_ps2_aspmain.py for the IMEM layout it encodes).
-            // aspMain_skip is kept above as a one-line revert.
+            // built from ROM 0x1060 at IMEM 0x1000, without prepending
+            // rspboot; see tools/build_ps2_aspmain.py).
             return aspMain_ps2;
         case M_NJPEGTASK: return njpgdspMain;
         default:
@@ -1814,7 +1813,7 @@ static ultramodern::renderer::WindowHandle create_window(ultramodern::gfx_callba
     SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight");
 #endif
     g_window = SDL_CreateWindow(
-        "Pokemon Stadium GS (PokemonStadiumGSRecomp)",
+        "Pokemon Stadium 2 Recomp",
         SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
         960, 720,
 #if defined(__ANDROID__)
@@ -1826,6 +1825,12 @@ static ultramodern::renderer::WindowHandle create_window(ultramodern::gfx_callba
     if (!g_window) {
         fprintf(stderr, "SDL_CreateWindow failed: %s\n", SDL_GetError());
         std::exit(EXIT_FAILURE);
+    }
+    // Share the launcher's game-specific icon with the runtime window.
+    const auto icon_path = pkmnstadium::exe_dir() / "assets" / "branding" / "stadium2-icon.bmp";
+    if (SDL_Surface* icon = SDL_LoadBMP(icon_path.string().c_str())) {
+        SDL_SetWindowIcon(g_window, icon);
+        SDL_FreeSurface(icon);
     }
     window = g_window;
     fprintf(stderr, "[PSR] create_window: ShowWindow\n"); fflush(stderr);
@@ -2721,6 +2726,10 @@ int main(int argc, char** argv) {
     pokestadium::register_overlays();
     std::fprintf(stderr, "[PSR] overlays registered\n"); std::fflush(stderr);
 
+    // Register the legacy aspMain hook only; aspMain_ps2 initializes itself.
+    pokestadium::rsp::register_pre_task_hooks();
+    std::fprintf(stderr, "[PSR] rsp pre-task hooks registered\n"); std::fflush(stderr);
+
 #if 0 // Stadium 1 RSP/audio address registrations; not valid for Stadium 2.
     // Register RSP pre-task hooks. Stadium's aspMain (the standard
     // libultra audio ucode, stripped variant at ROM 0x68020) skips
@@ -2838,7 +2847,7 @@ int main(int argc, char** argv) {
             ofn.lpstrFilter = "N64 ROM (*.z64;*.n64;*.v64)\0*.z64;*.n64;*.v64\0All Files (*.*)\0*.*\0";
             ofn.lpstrFile   = picked;
             ofn.nMaxFile    = MAX_PATH;
-            ofn.lpstrTitle  = "Select Pokemon Stadium (US v1.0) ROM";
+            ofn.lpstrTitle  = "Select Pokemon Stadium 2 (US v1.0) ROM";
             ofn.Flags       = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_HIDEREADONLY;
             if (!GetOpenFileNameA(&ofn)) return false;
             out = picked;
@@ -2893,15 +2902,15 @@ int main(int argc, char** argv) {
                     case recomp::RomValidationError::NotARom:         err_name = "not a recognizable N64 ROM"; break;
                     case recomp::RomValidationError::IncorrectRom:    err_name = "wrong game"; break;
                     case recomp::RomValidationError::NotYet:          err_name = "not yet supported"; break;
-                    case recomp::RomValidationError::IncorrectVersion:err_name = "wrong region/revision (need US v1.0)"; break;
+                    case recomp::RomValidationError::IncorrectVersion:err_name = "wrong region/revision (need Stadium 2 US v1.0)"; break;
                     default:                                          err_name = "validation error"; break;
                 }
                 std::fprintf(stderr, "[PSR] select_rom error: %d (%s)\n", (int)err, err_name); std::fflush(stderr);
 #ifdef _WIN32
                 std::string msg = "The selected ROM did not validate (" + std::string(err_name) + ").\n\n"
                                   "Path: " + rom_path.string() + "\n\n"
-                                  "Required: Pokemon Stadium (US v1.0)\n"
-                                  "Required MD5: ed1378bc12115f71209a77844965ba50\n\n"
+                                  "Required: Pokemon Stadium 2 (US v1.0)\n"
+                                  "Required MD5: 1561c75d11cedf356a8ddb1a4a5f9d5d\n\n"
                                   "Please select the correct ROM.";
                 MessageBoxA(NULL, msg.c_str(), "PokemonStadiumGSRecomp â€” wrong ROM", MB_ICONWARNING | MB_OK);
 #endif

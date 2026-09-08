@@ -1,6 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application
         android:label="Pokemon Stadium 2 Recomp"
+        android:icon="@drawable/ic_stadium2"
         android:theme="@style/AppTheme">
         <activity
             android:name=".MainActivity"

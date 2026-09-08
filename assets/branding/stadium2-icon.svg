@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">Stadium 2 Recomp icon</title>
+  <desc id="desc">Original gold and silver arena ring on a midnight navy field.</desc>
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="42%" r="72%">
+      <stop stop-color="#17365b"/>
+      <stop offset="1" stop-color="#050b18"/>
+    </radialGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#fff0a1"/>
+      <stop offset=".45" stop-color="#d8b84e"/>
+      <stop offset="1" stop-color="#8e681e"/>
+    </linearGradient>
+    <linearGradient id="silver" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#f4f7f8"/>
+      <stop offset=".52" stop-color="#aebbc4"/>
+      <stop offset="1" stop-color="#667886"/>
+    </linearGradient>
+  </defs>
+  <rect width="256" height="256" rx="38" fill="url(#bg)"/>
+  <circle cx="128" cy="128" r="91" fill="none" stroke="#020713" stroke-width="18" opacity=".7"/>
+  <circle cx="128" cy="128" r="87" fill="none" stroke="url(#silver)" stroke-width="13"/>
+  <circle cx="128" cy="128" r="70" fill="none" stroke="url(#gold)" stroke-width="12"/>
+  <circle cx="128" cy="128" r="50" fill="#0a1a31" stroke="#d8b84e" stroke-width="3"/>
+  <path d="M88 101C88 54 175 54 175 103C175 130 140 144 114 163H176V186H80V165C110 139 151 117 151 102C151 80 112 80 112 103Z" fill="url(#gold)" stroke="#081326" stroke-width="3"/>
+  <text x="128" y="232" text-anchor="middle" fill="#d8b84e" font-family="Arial,sans-serif" font-size="11" font-weight="700" letter-spacing="3">RECOMP</text>
+</svg>

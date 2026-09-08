@@ -25,6 +25,10 @@ if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
         set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-everything -Wall")
     endif()
 endif()
+if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND
+    CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 20.0)
+    add_compile_options(-Wno-uninitialized-const-pointer)
+endif()
 if (WIN32)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR")
 endif()
@@ -96,6 +100,35 @@ if (ANDROID)
 endif()
 
 add_subdirectory(${CMAKE_SOURCE_DIR}/lib/rt64 ${CMAKE_BINARY_DIR}/rt64)
+if (WIN32 AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND
+    CMAKE_CXX_SIMULATE_ID STREQUAL "MSVC" AND TARGET rt64)
+    target_compile_definitions(rt64 PRIVATE __PRFCHWINTRIN_H)
+    # -Wuninitialized-const-pointer (Clang 20+) false-positives on imgui's
+    # empty_string; rt64's own /W4 lands after the global suppression in this
+    # file and re-enables it, so pin it at target scope where it wins.
+    target_compile_options(rt64 PRIVATE -Wno-uninitialized-const-pointer)
+endif()
+
+
+# Clang-cl 22 already provides _m_prefetch; skip SDL 2.x's legacy redeclaration.
+if (WIN32 AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND
+    CMAKE_CXX_SIMULATE_ID STREQUAL "MSVC" AND TARGET rt64)
+    target_compile_definitions(rt64 PRIVATE __PRFCHWINTRIN_H)
+    target_compile_options(rt64 PRIVATE -Wno-error=uninitialized-const-pointer)
+endif()
+
+if (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+    # RT64 uses a raw-pointer __try/__except helper; disable C++ object
+    # unwinding for this target to avoid MSVC C2712 under /EHsc.
+    target_compile_options(rt64 PRIVATE /EHs-c-)
+endif()
+
+# hlslpp's scalar backend calls labs() without including <stdlib.h>. AppleClang
+# does not make that declaration available through <math.h>, so expose the
+# standard declaration only to RT64 on Apple builds.
+if (APPLE AND TARGET rt64)
+    target_compile_options(rt64 PRIVATE -include stdlib.h)
+endif()
 
 if (ANDROID)
     set(PSR_ADRENOTOOLS_DIR "${CMAKE_SOURCE_DIR}/lib/adrenotools" CACHE PATH
@@ -119,6 +152,25 @@ set(BUILD_SHARED_LIBS OFF)
 set(N64MODERN_RUNTIME_ROOT "${CMAKE_SOURCE_DIR}/lib/N64ModernRuntime" CACHE PATH
     "Path to the N64ModernRuntime checkout used by this game")
 add_subdirectory(${N64MODERN_RUNTIME_ROOT} ${CMAKE_BINARY_DIR}/lib/N64ModernRuntime)
+
+# The runtime keeps GCC/Clang warning spellings on its portable targets. Plain
+# MSVC rejects -Wno-unused-parameter as an invalid numeric /W option (D8021),
+# so remove that one inherited flag at the game boundary. Clang-cl accepts the
+# Clang spelling and does not need this filter.
+if (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+    foreach(runtime_target ultramodern librecomp)
+        if (TARGET ${runtime_target})
+            get_target_property(runtime_options ${runtime_target} COMPILE_OPTIONS)
+            if (runtime_options)
+                list(FILTER runtime_options EXCLUDE REGEX "^-Wno-unused-parameter$")
+                set_property(TARGET ${runtime_target} PROPERTY COMPILE_OPTIONS
+                    "${runtime_options}")
+            endif()
+            target_compile_options(${runtime_target} PRIVATE
+                "/FI${CMAKE_SOURCE_DIR}/include/msvc_compat.h")
+        endif()
+    endforeach()
+endif()
 get_target_property(LIBRECOMP_SOURCES librecomp SOURCES)
 list(REMOVE_ITEM LIBRECOMP_SOURCES
     "${N64MODERN_RUNTIME_ROOT}/librecomp/src/pi.cpp"
@@ -143,15 +195,30 @@ target_include_directories(rt64 PRIVATE ${CMAKE_BINARY_DIR}/rt64/src)
 
 # ---- RecompiledFuncs library (the recompiled game C) -----------------------
 add_library(RecompiledFuncs STATIC)
+option(PSR_UNITY_BUILD "Build generated game C sources in unity batches" ON)
 set_target_properties(RecompiledFuncs PROPERTIES
-    UNITY_BUILD ON
+    UNITY_BUILD ${PSR_UNITY_BUILD}
     UNITY_BUILD_BATCH_SIZE 4
 )
-target_compile_options(RecompiledFuncs PRIVATE
-    -fno-strict-aliasing
-    -Wno-unused-variable
-    -Wno-implicit-function-declaration
-)
+if (MSVC)
+    # Native MSVC and clang-cl both use COFF objects; the generated unity
+    # units can exceed the default section-count limit.
+    target_compile_options(RecompiledFuncs PRIVATE
+        /bigobj
+    )
+endif()
+if (CMAKE_C_COMPILER_ID STREQUAL "MSVC")
+    target_compile_options(RecompiledFuncs PRIVATE
+        /wd4101  # unreferenced local variable in generated C
+        /wd4013  # implicit declaration in generated C
+    )
+else()
+    target_compile_options(RecompiledFuncs PRIVATE
+        -fno-strict-aliasing
+        -Wno-unused-variable
+        -Wno-implicit-function-declaration
+    )
+endif()
 target_include_directories(RecompiledFuncs PRIVATE
     ${CMAKE_SOURCE_DIR}/include
     ${N64MODERN_RUNTIME_ROOT}/ultramodern/include
@@ -159,6 +226,31 @@ target_include_directories(RecompiledFuncs PRIVATE
     ${N64MODERN_RUNTIME_ROOT}/N64Recomp/include
 )
 file(GLOB FUNC_C_SOURCES CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/generated/*.c)
+# Repair the known absolute fragment-20 BSS bound before compilation.
+# The tool checks instruction sites and generated aliases, and fails closed.
+if(FUNC_C_SOURCES)
+    find_package(Python3 3.9 REQUIRED COMPONENTS Interpreter)
+    execute_process(
+        COMMAND "${Python3_EXECUTABLE}"
+            "${CMAKE_SOURCE_DIR}/tools/fix_fragment20_bounds.py"
+            "${CMAKE_SOURCE_DIR}/generated"
+        RESULT_VARIABLE PSR_BOUNDS_RESULT
+    )
+    if(NOT PSR_BOUNDS_RESULT EQUAL 0)
+        message(FATAL_ERROR "Fragment-20 bound validation failed; see diagnostic above.")
+    endif()
+    # The menu cursor's resource lies beyond the fragment's declared image
+    # extent, so its generated absolute load must match the relocated writer.
+    execute_process(
+        COMMAND "${Python3_EXECUTABLE}"
+            "${CMAKE_SOURCE_DIR}/tools/fix_menu_cursor_relocation.py"
+            "${CMAKE_SOURCE_DIR}/generated"
+        RESULT_VARIABLE PSR_CURSOR_RESULT
+    )
+    if(NOT PSR_CURSOR_RESULT EQUAL 0)
+        message(FATAL_ERROR "Menu cursor relocation validation failed; see diagnostic above.")
+    endif()
+endif()
 target_sources(RecompiledFuncs PRIVATE ${FUNC_C_SOURCES})
 
 # NOTE: the register-quit/GB-Tower TRACE_ENTRY/RETURN hooks (PKMNSTADIUM_TRACE_HOOKS)
@@ -196,7 +288,9 @@ endif()
 # ---- Runner executable ------------------------------------------------------
 set(PSR_RECOMPUI_SOURCE src/main/recompui_launcher.cpp)
 set(PSR_DEBUG_SERVER_SOURCE src/main/debug_server.cpp)
-set(PSR_DEBUG_SERVER_SOURCE ${CMAKE_SOURCE_DIR}/debug_server_macos.cpp)
+if (APPLE)
+    set(PSR_DEBUG_SERVER_SOURCE ${CMAKE_SOURCE_DIR}/debug_server_macos.cpp)
+endif()
 set(PSR_POST_MORTEM_SOURCE src/main/post_mortem.cpp)
 if (NOT WIN32)
     set(PSR_POST_MORTEM_SOURCE ${CMAKE_SOURCE_DIR}/mac_post_mortem_stub.cpp)
@@ -271,11 +365,15 @@ target_include_directories(PokemonStadiumGSRecomp PRIVATE
     ${CMAKE_CURRENT_BINARY_DIR}
 )
 
-target_compile_options(PokemonStadiumGSRecomp PRIVATE
-    -fno-strict-aliasing
-    -fms-extensions
-)
-if (NOT APPLE AND NOT ANDROID)
+if (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+    # The native MSVC compiler does not understand Clang's -f spellings.
+else()
+    target_compile_options(PokemonStadiumGSRecomp PRIVATE
+        -fno-strict-aliasing
+        -fms-extensions
+    )
+endif()
+if (NOT APPLE AND NOT ANDROID AND NOT CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     target_compile_options(PokemonStadiumGSRecomp PRIVATE
         -march=nehalem  # Required by RT64's RSP simulator (SSSE3, SSE4.1, SSE4.2)
     )
@@ -286,6 +384,12 @@ endif()
 # max() declarations. Scoped to the runner target so the sub-builds are untouched.
 target_compile_definitions(PokemonStadiumGSRecomp PRIVATE NOMINMAX)
 
+# Clang-cl 22 already provides _m_prefetch; skip SDL 2.x's legacy redeclaration.
+if (WIN32 AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND
+    CMAKE_CXX_SIMULATE_ID STREQUAL "MSVC")
+    target_compile_definitions(PokemonStadiumGSRecomp PRIVATE __PRFCHWINTRIN_H)
+endif()
+
 # Emit PDBs in Release for the runner + librecomp/ultramodern so the SEH
 # crash filter's stack walk produces real symbol names. clang-cl needs
 # /Z7 (embed CodeView in objects) on the compiler side and /DEBUG on the
@@ -294,13 +398,11 @@ target_compile_definitions(PokemonStadiumGSRecomp PRIVATE NOMINMAX)
 # same address (which would corrupt the stack-walk symbol mapping).
 if (MSVC)
     target_compile_options(PokemonStadiumGSRecomp PRIVATE /Z7)
-    # The 1007 generated funcs dominate compile memory/time. Their /Z7 CodeView
-    # only feeds the host SEH stack-walk, which is already unsymbolized for the
-    # recompiled code and irrelevant to the guest trace_recent ring. In a
-    # PSR_TRACE_HOOKS build we diagnose from the guest ring, so skip /Z7 here —
-    # it roughly halves per-object memory and avoids clang-cl thrashing/OOM.
-    if (NOT PSR_TRACE_HOOKS)
-        target_compile_options(RecompiledFuncs   PRIVATE /Z7)
+    # Generated C is intentionally left without CodeView by default; embedding
+    # symbols in every large translation unit exhausts MSVC memory.
+    option(PSR_GENERATED_DEBUG "Embed CodeView symbols in generated C" OFF)
+    if (PSR_GENERATED_DEBUG)
+        target_compile_options(RecompiledFuncs PRIVATE /Z7)
     endif()
     target_link_options(PokemonStadiumGSRecomp PRIVATE /DEBUG /OPT:REF /OPT:NOICF)
     if (TARGET librecomp)
@@ -311,25 +413,41 @@ if (MSVC)
     endif()
 endif()
 
-# ---- SDL2 (fetched on Windows; standard system package on Linux/Mac) -------
+# ---- SDL2 (built from the checked-out submodule on Windows) ----------------
 if (WIN32)
-    include(FetchContent)
-    if (DEFINED ENV{SDL2_VERSION})
-        set(SDL2_VERSION $ENV{SDL2_VERSION})
-    else()
-        set(SDL2_VERSION "2.30.3")
+    set(PSR_SDL2_DIR "${CMAKE_SOURCE_DIR}/lib/SDL2" CACHE PATH
+        "Path to the SDL2 checkout used for Windows builds")
+    if (NOT EXISTS "${PSR_SDL2_DIR}/CMakeLists.txt")
+        message(FATAL_ERROR
+            "Windows builds require SDL2 at ${PSR_SDL2_DIR}. "
+            "Initialize the lib/SDL2 submodule before configuring.")
     endif()
-    FetchContent_Declare(
-        sdl2
-        URL https://github.com/libsdl-org/SDL/releases/download/release-${SDL2_VERSION}/SDL2-devel-${SDL2_VERSION}-VC.zip
-    )
-    FetchContent_MakeAvailable(sdl2)
-    target_include_directories(PokemonStadiumGSRecomp PRIVATE ${sdl2_SOURCE_DIR}/include)
-    target_link_directories(PokemonStadiumGSRecomp PRIVATE ${sdl2_SOURCE_DIR}/lib/x64)
+    set(SDL_SHARED ON CACHE BOOL "" FORCE)
+    set(SDL_STATIC OFF CACHE BOOL "" FORCE)
+    set(SDL_TEST OFF CACHE BOOL "" FORCE)
+    add_subdirectory(${PSR_SDL2_DIR} ${CMAKE_BINARY_DIR}/SDL2 EXCLUDE_FROM_ALL)
+    if (CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND
+        CMAKE_CXX_SIMULATE_ID STREQUAL "MSVC")
+        # SDL2's clang-cl link can otherwise retain the dynamic CRT defaults
+        # even though this project rewrites its compile flags to /MT.
+        target_link_options(SDL2 PRIVATE
+            "$<$<CONFIG:Debug>:/DEFAULTLIB:libcmtd.lib>"
+            "$<$<CONFIG:Debug>:/DEFAULTLIB:libucrtd.lib>"
+            "$<$<NOT:$<CONFIG:Debug>>:/DEFAULTLIB:libcmt.lib>"
+            "$<$<NOT:$<CONFIG:Debug>>:/DEFAULTLIB:libucrt.lib>"
+        )
+        target_link_options(PokemonStadiumGSRecomp PRIVATE
+            "$<$<CONFIG:Debug>:/DEFAULTLIB:libcmtd.lib>"
+            "$<$<CONFIG:Debug>:/DEFAULTLIB:libucrtd.lib>"
+            "$<$<NOT:$<CONFIG:Debug>>:/DEFAULTLIB:libcmt.lib>"
+            "$<$<NOT:$<CONFIG:Debug>>:/DEFAULTLIB:libucrt.lib>"
+        )
+    endif()
+    target_include_directories(PokemonStadiumGSRecomp PRIVATE ${PSR_SDL2_DIR}/include)
 
     add_custom_command(TARGET PokemonStadiumGSRecomp POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${sdl2_SOURCE_DIR}/lib/x64/SDL2.dll"
+            "$<TARGET_FILE:SDL2>"
             "${CMAKE_SOURCE_DIR}/lib/rt64/src/contrib/dxc/bin/x64/dxil.dll"
             "${CMAKE_SOURCE_DIR}/lib/rt64/src/contrib/dxc/bin/x64/dxcompiler.dll"
             $<TARGET_FILE_DIR:PokemonStadiumGSRecomp>
@@ -419,12 +537,25 @@ set(RECOMP_UI_HOST_IMGUI_INCLUDE
         ${CMAKE_SOURCE_DIR}/lib/rt64/src/contrib/imgui/backends/imgui_impl_opengl3.cpp)
     # recomp-ui pins the target to C++17; PSR's runner needs C++20.
     set_target_properties(PokemonStadiumGSRecomp PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED ON)
-set_source_files_properties(${CMAKE_SOURCE_DIR}/recomp-ui/src/common/backends/imgui/launcher_imgui.cpp PROPERTIES COMPILE_OPTIONS "/Zc:char8_t-")
+if (MSVC)
+    set_source_files_properties(${CMAKE_SOURCE_DIR}/recomp-ui/src/common/backends/imgui/launcher_imgui.cpp PROPERTIES COMPILE_OPTIONS "/Zc:char8_t-")
+elseif (CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
+    set_source_files_properties(${CMAKE_SOURCE_DIR}/recomp-ui/src/common/backends/imgui/launcher_imgui.cpp PROPERTIES COMPILE_OPTIONS "-fno-char8_t")
+endif()
 endif()
 
 # ---- UI assets (fonts, etc.) next to the executable ------------------------
+if(WIN32)
+    enable_language(RC)
+    target_sources(PokemonStadiumGSRecomp PRIVATE assets/branding/stadium2.rc)
+    set_source_files_properties(assets/branding/stadium2.rc PROPERTIES
+        INCLUDE_DIRECTORIES "${CMAKE_SOURCE_DIR}/assets/branding")
+endif()
 add_custom_command(TARGET PokemonStadiumGSRecomp POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         "${CMAKE_SOURCE_DIR}/assets"
         "$<TARGET_FILE_DIR:PokemonStadiumGSRecomp>/assets"
 )
+
+# N64Recomp owns the vendored TinyCC layout and stages it for this runner.
+n64recomp_stage_tcc(PokemonStadiumGSRecomp)
