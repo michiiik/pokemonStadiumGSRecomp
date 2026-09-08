@@ -1813,7 +1813,7 @@ static ultramodern::renderer::WindowHandle create_window(ultramodern::gfx_callba
     SDL_SetHint(SDL_HINT_ORIENTATIONS, "LandscapeLeft LandscapeRight");
 #endif
     g_window = SDL_CreateWindow(
-        "Pokemon Stadium GS (PokemonStadiumGSRecomp)",
+        "Pokemon Stadium 2 Recomp",
         SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
         960, 720,
 #if defined(__ANDROID__)
@@ -1825,6 +1825,12 @@ static ultramodern::renderer::WindowHandle create_window(ultramodern::gfx_callba
     if (!g_window) {
         fprintf(stderr, "SDL_CreateWindow failed: %s\n", SDL_GetError());
         std::exit(EXIT_FAILURE);
+    }
+    // Share the launcher's game-specific icon with the runtime window.
+    const auto icon_path = pkmnstadium::exe_dir() / "assets" / "branding" / "stadium2-icon.bmp";
+    if (SDL_Surface* icon = SDL_LoadBMP(icon_path.string().c_str())) {
+        SDL_SetWindowIcon(g_window, icon);
+        SDL_FreeSurface(icon);
     }
     window = g_window;
     fprintf(stderr, "[PSR] create_window: ShowWindow\n"); fflush(stderr);

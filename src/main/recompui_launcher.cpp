@@ -256,7 +256,7 @@ void write_settings_to_cfg(const RecompLauncherCSettings& s) {
         std::fprintf(stderr, "[recompui] WARN: cannot write launcher.cfg\n");
         return;
     }
-    f << "# PokemonStadiumRecomp launcher configuration - managed by the launcher.\n";
+    f << "# Pokemon Stadium 2 Recomp launcher configuration - managed by the launcher.\n";
     f << "# pN_device : input source for player N (0=None, 1=Keyboard, 2=Gamepad).\n";
     f << "# pN_enabled: whether player N is active (mirrors pN_device != None).\n";
     f << "# pN_rom / pN_save: the Transfer Pak GB cartridge + save for player N.\n";
@@ -343,7 +343,12 @@ bool run(const char* rom_path_in, char* out_rom, std::size_t out_len) {
     // System identity + RT64 capability defaults (has_renderer/supersampling/
     // antialiasing/fullscreen), then the per-game facts a Stadium host adds.
     launcher_profile_apply("n64", &gi);
-    gi.name         = "Pok\xC3\xA9mon Stadium";
+    gi.name         = "Pok\xC3\xA9mon Stadium 2";
+    gi.theme        = "stadium2";
+    gi.boxart_path  = "assets/img/boxart_stadium2.tga";
+    static const std::string icon_path =
+        (pkmnstadium::exe_dir() / "assets" / "branding" / "stadium2-icon.bmp").string();
+    gi.window_icon_path = icon_path.c_str();
     gi.region       = "USA";   // target ROM is US v1.0
     // ROM identity: SHA-1 of the target US v1.0 dump (MD5 ed1378bc..., the pin
     // required by the project). The launcher hashes the picked ROM and shows
@@ -389,7 +394,7 @@ bool run(const char* rom_path_in, char* out_rom, std::size_t out_len) {
 
     char chosen[1024] = {0};
     const int rc = recomp_launcher_run_window(
-        "Pok\xC3\xA9mon Stadium \xE2\x80\x94 Launcher", // em dash
+        "Pok\xC3\xA9mon Stadium 2 \xE2\x80\x94 Launcher", // em dash
         &settings, &gi, s_assets.c_str(),
         (rom_path_in != nullptr && rom_path_in[0] != '\0') ? rom_path_in : nullptr,
         chosen, sizeof(chosen));

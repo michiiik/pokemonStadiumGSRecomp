@@ -545,6 +545,12 @@ endif()
 endif()
 
 # ---- UI assets (fonts, etc.) next to the executable ------------------------
+if(WIN32)
+    enable_language(RC)
+    target_sources(PokemonStadiumGSRecomp PRIVATE assets/branding/stadium2.rc)
+    set_source_files_properties(assets/branding/stadium2.rc PROPERTIES
+        INCLUDE_DIRECTORIES "${CMAKE_SOURCE_DIR}/assets/branding")
+endif()
 add_custom_command(TARGET PokemonStadiumGSRecomp POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         "${CMAKE_SOURCE_DIR}/assets"
