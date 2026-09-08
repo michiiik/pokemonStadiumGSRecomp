@@ -95,9 +95,9 @@ char gen1_char(uint8_t b) {
 }
 
 // GameInfo.tpak_inspect callback: the HOST's cartridge brain. Sniffs the GB
-// header @0x134 for the Gen-1 game key and decodes the Gen-1 save's trainer
-// name + ID (gated on the main-data checksum). Matches the RecompLauncherCTpak
-// contract in recomp_launcher.h (cart_kind: 1=red 2=blue 3=yellow 4=green).
+// header @0x134 for the Gen-1/Gen-2 game key and decodes the save's trainer
+// name + ID (gated on a valid save checksum). Gen-2 cartridges use the generic
+// cartridge glyph until dedicated cart art is added.
 int tpak_inspect(const char* rom_path, const char* save_path, RecompLauncherCTpak* out) {
     std::memset(out, 0, sizeof(*out));
     if (rom_path == nullptr || rom_path[0] == '\0') return 0;
@@ -116,21 +116,47 @@ int tpak_inspect(const char* rom_path, const char* save_path, RecompLauncherCTpa
     else if (has("RED"))    key = "red";
     else if (has("BLUE"))   key = "blue";
     else if (has("GREEN"))  key = "green";
+    else if (has("GLD"))    key = "gold";
+    else if (has("SLV"))    key = "silver";
+    else if (has("CRY"))    key = "crystal";
 
     out->valid = 1;
     if      (key == "red")    { out->cart_kind = 1; std::snprintf(out->cart_label, sizeof(out->cart_label), "Pok\xC3\xA9mon Red"); }
     else if (key == "blue")   { out->cart_kind = 2; std::snprintf(out->cart_label, sizeof(out->cart_label), "Pok\xC3\xA9mon Blue"); }
     else if (key == "yellow") { out->cart_kind = 3; std::snprintf(out->cart_label, sizeof(out->cart_label), "Pok\xC3\xA9mon Yellow"); }
     else if (key == "green")  { out->cart_kind = 4; std::snprintf(out->cart_label, sizeof(out->cart_label), "Pok\xC3\xA9mon Green"); }
+    else if (key == "gold")   { out->cart_kind = 0; std::snprintf(out->cart_label, sizeof(out->cart_label), "Pok\xC3\xA9mon Gold"); }
+    else if (key == "silver") { out->cart_kind = 0; std::snprintf(out->cart_label, sizeof(out->cart_label), "Pok\xC3\xA9mon Silver"); }
+    else if (key == "crystal"){ out->cart_kind = 0; std::snprintf(out->cart_label, sizeof(out->cart_label), "Pok\xC3\xA9mon Crystal"); }
     else                      { out->cart_kind = 0; out->cart_label[0] = '\0'; }
 
-    // Gen-1 save: trainer name + ID, only when the main-data checksum matches.
+    // Gen-1/Gen-2 save: trainer name + ID, only when a known checksum matches.
     if (save_path != nullptr && save_path[0] != '\0') {
         std::ifstream sf(save_path, std::ios::binary);
         if (sf) {
             const std::vector<uint8_t> sav((std::istreambuf_iterator<char>(sf)),
                                            std::istreambuf_iterator<char>());
-            if (sav.size() >= 0x3524) {
+            const bool gen2 = key == "gold" || key == "silver" || key == "crystal";
+            if (gen2 && sav.size() >= 0x8000) {
+                const size_t checksum_end = key == "crystal" ? 0x2B82 : 0x2D68;
+                const size_t checksum_offset = key == "crystal" ? 0x2D0D : 0x2D69;
+                uint32_t sum = 0;
+                for (size_t i = 0x2009; i <= checksum_end; ++i) sum += sav[i];
+                const uint16_t stored = static_cast<uint16_t>(sav[checksum_offset]) |
+                                        (static_cast<uint16_t>(sav[checksum_offset + 1]) << 8);
+                if (static_cast<uint16_t>(sum) == stored) {
+                    std::string name;
+                    for (size_t i = 0x200B; i <= 0x2015; ++i) {
+                        const uint8_t c = sav[i];
+                        if (c == 0x50 || c == 0x00) break;
+                        const char ch = gen1_char(c);
+                        if (ch != '\0') name.push_back(ch);
+                    }
+                    std::snprintf(out->trainer_name, sizeof(out->trainer_name), "%s", name.c_str());
+                    const int id = (sav[0x2009] << 8) | sav[0x200A];
+                    std::snprintf(out->trainer_id, sizeof(out->trainer_id), "%05d", id);
+                }
+            } else if (!gen2 && sav.size() >= 0x3524) {
                 uint32_t sum = 0;
                 for (size_t i = 0x2598; i <= 0x3522; ++i) sum += sav[i];
                 const uint8_t calc = static_cast<uint8_t>(~(sum & 0xFF));
