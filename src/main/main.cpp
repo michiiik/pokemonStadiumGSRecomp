@@ -850,25 +850,6 @@ static RspExitReason aspMain_skip(uint8_t* rdram, uint32_t ucode_addr) {
     return RspExitReason::Broke;
 }
 
-// Stadium 2 can submit a zero-filled audio buffer while the CPU audio
-// producer is still being initialized. Do not feed that buffer to aspMain:
-// its reserved command opcodes eventually resolve to the 0x7FFF sentinel.
-static RspExitReason aspMain_empty(uint8_t* rdram, uint32_t ucode_addr) {
-    (void)rdram;
-    (void)ucode_addr;
-    return RspExitReason::Broke;
-}
-
-static bool aspMain_cmdlist_is_zero(uint8_t* rdram, const OSTask* task) {
-    const uint32_t size = (uint32_t)task->t.data_size;
-    if (size == 0 || size > 0x10000u) return false;
-    const uint32_t paddr = (uint32_t)task->t.data_ptr & 0xFFFFFFu;
-    if ((uint64_t)paddr + size > 0x800000u) return false;
-    for (uint32_t i = 0; i < size; ++i) {
-        if (rdram[(paddr + i) ^ 3] != 0) return false;
-    }
-    return true;
-}
 static RspExitReason aspMain_capture(uint8_t* rdram, uint32_t ucode_addr) {
     const char* dir = psr_aspmain_capture_dir();
     const char* spike_base = psr_aspmain_spike_dir();
@@ -1015,14 +996,11 @@ static RspUcodeFunc* get_rsp_microcode(uint8_t* rdram, const OSTask* task) {
 
     switch (task->t.type) {
         case M_AUDTASK:
-            // A zero-filled startup buffer is not a valid aspMain command list.
-            if (aspMain_cmdlist_is_zero(rdram, task)) return aspMain_empty;
             // Always-on: snapshot the CPU-built Acmd list before it runs.
             audcmd_record(rdram, task);
             // Stadium 2's own recompiled microcode (rsp/aspMain_ps2.cpp,
-            // built from ROM 0x1060 + rspboot at ROM 0xB70; see
-            // tools/build_ps2_aspmain.py for the IMEM layout it encodes).
-            // aspMain_skip is kept above as a one-line revert.
+            // built from ROM 0x1060 at IMEM 0x1000, without prepending
+            // rspboot; see tools/build_ps2_aspmain.py).
             return aspMain_ps2;
         case M_NJPEGTASK: return njpgdspMain;
         default:
@@ -2742,7 +2720,7 @@ int main(int argc, char** argv) {
     pokestadium::register_overlays();
     std::fprintf(stderr, "[PSR] overlays registered\n"); std::fflush(stderr);
 
-    // Stadium 2 uses the aspMain_ps2 RSP task; register its boot-state hook.
+    // Register the legacy aspMain hook only; aspMain_ps2 initializes itself.
     pokestadium::rsp::register_pre_task_hooks();
     std::fprintf(stderr, "[PSR] rsp pre-task hooks registered\n"); std::fflush(stderr);
 

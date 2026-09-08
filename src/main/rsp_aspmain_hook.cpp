@@ -373,7 +373,9 @@ static void aspmain_capture_input(uint8_t* rdram, ::RspContext* ctx,
 }
 
 void register_pre_task_hooks() {
-    ::recomp::rsp::set_pre_task_hook("aspMain_ps2", aspmain_pre_task);
+    // Stadium 2 initializes its own command DMA at 0x1054/0x10CC.
+    // Only Stadium 1's stripped aspMain needs this boot residue.
+    ::recomp::rsp::set_pre_task_hook("aspMain", aspmain_pre_task);
 }
 
 }  // namespace pokestadium::rsp

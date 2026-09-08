@@ -139,6 +139,12 @@ force_function_vrams = [0x80021A2C]
 [patches]
 ignored = ["osSetTime"]
 
+# Stadium 2 writes AI DRAM/LEN directly instead of calling osAiSetNextBuffer.
+[[patches.hook]]
+func = "func_800195C0"
+before_vram = 0x80019628
+text = "{ extern void recomp_ai_submit_buffer(uint8_t*, uint32_t, uint32_t); recomp_ai_submit_buffer(rdram, (uint32_t)ctx->r3, (uint32_t)ctx->r5); }"
+
 [[patches.hook]]
 func = "func_80002210"
 before_vram = 0x80002210  # first instr of Memmap_RelocateFragment => entry hook

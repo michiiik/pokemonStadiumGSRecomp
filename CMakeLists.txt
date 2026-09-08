@@ -226,6 +226,20 @@ target_include_directories(RecompiledFuncs PRIVATE
     ${N64MODERN_RUNTIME_ROOT}/N64Recomp/include
 )
 file(GLOB FUNC_C_SOURCES CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/generated/*.c)
+# Repair the known absolute fragment-20 BSS bound before compilation.
+# The tool checks instruction sites and generated aliases, and fails closed.
+if(FUNC_C_SOURCES)
+    find_package(Python3 3.9 REQUIRED COMPONENTS Interpreter)
+    execute_process(
+        COMMAND "${Python3_EXECUTABLE}"
+            "${CMAKE_SOURCE_DIR}/tools/fix_fragment20_bounds.py"
+            "${CMAKE_SOURCE_DIR}/generated"
+        RESULT_VARIABLE PSR_BOUNDS_RESULT
+    )
+    if(NOT PSR_BOUNDS_RESULT EQUAL 0)
+        message(FATAL_ERROR "Fragment-20 bound validation failed; see diagnostic above.")
+    endif()
+endif()
 target_sources(RecompiledFuncs PRIVATE ${FUNC_C_SOURCES})
 
 # NOTE: the register-quit/GB-Tower TRACE_ENTRY/RETURN hooks (PKMNSTADIUM_TRACE_HOOKS)
