@@ -239,6 +239,17 @@ if(FUNC_C_SOURCES)
     if(NOT PSR_BOUNDS_RESULT EQUAL 0)
         message(FATAL_ERROR "Fragment-20 bound validation failed; see diagnostic above.")
     endif()
+    # The menu cursor's resource lies beyond the fragment's declared image
+    # extent, so its generated absolute load must match the relocated writer.
+    execute_process(
+        COMMAND "${Python3_EXECUTABLE}"
+            "${CMAKE_SOURCE_DIR}/tools/fix_menu_cursor_relocation.py"
+            "${CMAKE_SOURCE_DIR}/generated"
+        RESULT_VARIABLE PSR_CURSOR_RESULT
+    )
+    if(NOT PSR_CURSOR_RESULT EQUAL 0)
+        message(FATAL_ERROR "Menu cursor relocation validation failed; see diagnostic above.")
+    endif()
 endif()
 target_sources(RecompiledFuncs PRIVATE ${FUNC_C_SOURCES})
 
