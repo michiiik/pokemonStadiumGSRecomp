@@ -100,11 +100,21 @@ if (ANDROID)
 endif()
 
 add_subdirectory(${CMAKE_SOURCE_DIR}/lib/rt64 ${CMAKE_BINARY_DIR}/rt64)
+if (WIN32 AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND
+    CMAKE_CXX_SIMULATE_ID STREQUAL "MSVC" AND TARGET rt64)
+    target_compile_definitions(rt64 PRIVATE __PRFCHWINTRIN_H)
+    # -Wuninitialized-const-pointer (Clang 20+) false-positives on imgui's
+    # empty_string; rt64's own /W4 lands after the global suppression in this
+    # file and re-enables it, so pin it at target scope where it wins.
+    target_compile_options(rt64 PRIVATE -Wno-uninitialized-const-pointer)
+endif()
+
 
 # Clang-cl 22 already provides _m_prefetch; skip SDL 2.x's legacy redeclaration.
 if (WIN32 AND CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND
     CMAKE_CXX_SIMULATE_ID STREQUAL "MSVC" AND TARGET rt64)
     target_compile_definitions(rt64 PRIVATE __PRFCHWINTRIN_H)
+    target_compile_options(rt64 PRIVATE -Wno-error=uninitialized-const-pointer)
 endif()
 
 if (CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
