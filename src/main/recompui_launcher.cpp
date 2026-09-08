@@ -138,10 +138,12 @@ int tpak_inspect(const char* rom_path, const char* save_path, RecompLauncherCTpa
                                            std::istreambuf_iterator<char>());
             const bool gen2 = key == "gold" || key == "silver" || key == "crystal";
             if (gen2 && sav.size() >= 0x8000) {
+                const size_t checksum_end = key == "crystal" ? 0x2B82 : 0x2D68;
+                const size_t checksum_offset = key == "crystal" ? 0x2D0D : 0x2D69;
                 uint32_t sum = 0;
-                for (size_t i = 0x2009; i <= 0x2D68; ++i) sum += sav[i];
-                const uint16_t stored = static_cast<uint16_t>(sav[0x2D69]) |
-                                        (static_cast<uint16_t>(sav[0x2D6A]) << 8);
+                for (size_t i = 0x2009; i <= checksum_end; ++i) sum += sav[i];
+                const uint16_t stored = static_cast<uint16_t>(sav[checksum_offset]) |
+                                        (static_cast<uint16_t>(sav[checksum_offset + 1]) << 8);
                 if (static_cast<uint16_t>(sum) == stored) {
                     std::string name;
                     for (size_t i = 0x200B; i <= 0x2015; ++i) {
