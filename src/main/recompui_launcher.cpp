@@ -118,6 +118,7 @@ int tpak_inspect(const char* rom_path, const char* save_path, RecompLauncherCTpa
     else if (has("GREEN"))  key = "green";
     else if (has("GLD"))    key = "gold";
     else if (has("SLV"))    key = "silver";
+    else if (has("CRY"))    key = "crystal";
 
     out->valid = 1;
     if      (key == "red")    { out->cart_kind = 1; std::snprintf(out->cart_label, sizeof(out->cart_label), "Pok\xC3\xA9mon Red"); }
@@ -126,6 +127,7 @@ int tpak_inspect(const char* rom_path, const char* save_path, RecompLauncherCTpa
     else if (key == "green")  { out->cart_kind = 4; std::snprintf(out->cart_label, sizeof(out->cart_label), "Pok\xC3\xA9mon Green"); }
     else if (key == "gold")   { out->cart_kind = 0; std::snprintf(out->cart_label, sizeof(out->cart_label), "Pok\xC3\xA9mon Gold"); }
     else if (key == "silver") { out->cart_kind = 0; std::snprintf(out->cart_label, sizeof(out->cart_label), "Pok\xC3\xA9mon Silver"); }
+    else if (key == "crystal"){ out->cart_kind = 0; std::snprintf(out->cart_label, sizeof(out->cart_label), "Pok\xC3\xA9mon Crystal"); }
     else                      { out->cart_kind = 0; out->cart_label[0] = '\0'; }
 
     // Gen-1/Gen-2 save: trainer name + ID, only when a known checksum matches.
@@ -134,7 +136,7 @@ int tpak_inspect(const char* rom_path, const char* save_path, RecompLauncherCTpa
         if (sf) {
             const std::vector<uint8_t> sav((std::istreambuf_iterator<char>(sf)),
                                            std::istreambuf_iterator<char>());
-            const bool gen2 = key == "gold" || key == "silver";
+            const bool gen2 = key == "gold" || key == "silver" || key == "crystal";
             if (gen2 && sav.size() >= 0x8000) {
                 uint32_t sum = 0;
                 for (size_t i = 0x2009; i <= 0x2D68; ++i) sum += sav[i];
