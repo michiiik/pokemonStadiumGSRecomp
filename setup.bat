@@ -70,6 +70,13 @@ if /I "%WITH_ARES%"=="1" (
     )
 )
 
+echo Applying dependency patches (tools\apply_dependency_patches.py)...
+py -3 tools\apply_dependency_patches.py
+if errorlevel 1 (
+    echo Error: dependency patches failed to apply. See the messages above.
+    exit /b 1
+)
+
 echo.
 echo Repository dependencies are available.
 for /f %%H in ('git -C "%DECOMP_DIR%" rev-parse --short HEAD') do echo   pokestadiumgs: %%H
